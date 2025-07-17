@@ -1,6 +1,4 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-
-[build]
-  publish = "public"
+  external_node_modules = ["openai"]
