@@ -34,19 +34,25 @@
       margin-bottom: 12px;
       padding: 10px 14px;
       border-radius: 16px;
-      max-width: 80%;
+      max-width: 70%;
       line-height: 1.4;
       word-wrap: break-word;
+      display: inline-block;
+      clear: both;
     }
     .message.user {
       background-color: #007bff;
       color: #fff;
       align-self: flex-end;
+      margin-left: auto;
+      border-bottom-right-radius: 0;
     }
     .message.bot {
       background-color: #e9ecef;
       color: #333;
       align-self: flex-start;
+      margin-right: auto;
+      border-bottom-left-radius: 0;
     }
     .input-area {
       display: flex;
