@@ -104,12 +104,18 @@
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
 
-    function appendMessage(text, sender) {
+    function appendMessage(text, sender, id = null) {
       const message = document.createElement('div');
       message.classList.add('message', sender);
+      if (id) message.id = id;
       message.textContent = text;
       messagesContainer.appendChild(message);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function removeMessageById(id) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
     }
 
     sendButton.addEventListener('click', async () => {
@@ -118,14 +124,27 @@
         appendMessage(text, 'user');
         userInput.value = '';
 
-        const response = await fetch('/.netlify/functions/gptHandler', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text })
-        });
+        // Messaggio temporaneo tipo “sta accedendo ai ricordi...”
+        const loaderId = "loader-" + Date.now();
+        appendMessage("Sto accedendo ai suoi ricordi...", 'bot', loaderId);
 
-        const data = await response.json();
-        appendMessage(data.reply || "Errore nella risposta.", 'bot');
+        try {
+          const response = await fetch('/.netlify/functions/gptHandler', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text })
+          });
+
+          const data = await response.json();
+
+          // Rimuovi il messaggio temporaneo e sostituiscilo con quello vero
+          removeMessageById(loaderId);
+          appendMessage(data.reply || "Errore nella risposta.", 'bot');
+
+        } catch (err) {
+          removeMessageById(loaderId);
+          appendMessage("Si è verificato un errore.", 'bot');
+        }
       }
     });
 
