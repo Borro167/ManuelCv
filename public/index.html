@@ -1,17 +1,14 @@
-# Creo il file HTML aggiornato con lo stile di chat "naturale" tipo WhatsApp/ChatGPT
-html_path = "/mnt/data/index_chatcv_style_migliorato.html"
-
-html_content = '''<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ChatCV</title>
+  <title>Chat</title>
   <style>
     body {
       margin: 0;
-      font-family: 'Segoe UI', sans-serif;
-      background-color: #f0f2f5;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f2f2f2;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -20,90 +17,77 @@ html_content = '''<!DOCTYPE html>
     .chat-container {
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
-      height: 90vh;
       width: 100%;
       max-width: 600px;
+      height: 90vh;
+      border: 1px solid #ddd;
       background-color: #fff;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      border-radius: 8px;
       overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
     .messages {
-      flex-grow: 1;
-      padding: 20px;
+      flex: 1;
+      padding: 16px;
       overflow-y: auto;
+      display: flex;
+      flex-direction: column;
     }
     .message {
-      max-width: 80%;
-      padding: 12px 16px;
       margin-bottom: 12px;
-      border-radius: 18px;
-      font-size: 15px;
-      line-height: 1.5;
+      padding: 10px 14px;
+      border-radius: 16px;
+      max-width: 70%;
+      line-height: 1.4;
       word-wrap: break-word;
-      position: relative;
-      clear: both;
     }
     .message.user {
       background-color: #007bff;
       color: #fff;
       align-self: flex-end;
       border-bottom-right-radius: 0;
-      margin-left: auto;
     }
     .message.bot {
-      background-color: #e5e5ea;
-      color: #000;
+      background-color: #e9ecef;
+      color: #333;
       align-self: flex-start;
       border-bottom-left-radius: 0;
-      margin-right: auto;
+    }
+    .message.thinking {
+      font-style: italic;
+      color: #888;
+      align-self: center;
+      background: none;
+      padding: 0;
+      margin-bottom: 10px;
     }
     .input-area {
       display: flex;
-      padding: 12px;
       border-top: 1px solid #ddd;
+      padding: 8px;
       background-color: #fafafa;
     }
     .input-area input {
       flex: 1;
-      padding: 10px 14px;
-      font-size: 16px;
+      padding: 10px;
       border: 1px solid #ccc;
       border-radius: 20px;
       outline: none;
+      font-size: 1em;
     }
     .input-area button {
-      margin-left: 10px;
-      padding: 10px 20px;
+      margin-left: 8px;
+      padding: 10px 16px;
       border: none;
       background-color: #007bff;
-      color: white;
-      font-size: 16px;
+      color: #fff;
       border-radius: 20px;
       cursor: pointer;
+      font-size: 1em;
+      transition: background-color 0.2s ease;
     }
-    .typing-indicator {
-      display: inline-block;
-    }
-    .typing-indicator span {
-      display: inline-block;
-      width: 6px;
-      height: 6px;
-      margin: 0 2px;
-      background-color: #555;
-      border-radius: 50%;
-      animation: blink 1.4s infinite both;
-    }
-    .typing-indicator span:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-    .typing-indicator span:nth-child(3) {
-      animation-delay: 0.4s;
-    }
-    @keyframes blink {
-      0%, 80%, 100% { opacity: 0; }
-      40% { opacity: 1; }
+    .input-area button:hover {
+      background-color: #0056b3;
     }
   </style>
 </head>
@@ -127,18 +111,13 @@ html_content = '''<!DOCTYPE html>
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
 
-    function appendMessage(text, sender, id = null) {
-      const msg = document.createElement('div');
-      msg.classList.add('message', sender);
-      if (id) msg.id = id;
-      msg.innerHTML = text;
-      messagesContainer.appendChild(msg);
+    function appendMessage(text, sender) {
+      const message = document.createElement('div');
+      message.classList.add('message', sender);
+      message.textContent = text;
+      messagesContainer.appendChild(message);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
-    function removeMessageById(id) {
-      const el = document.getElementById(id);
-      if (el) el.remove();
+      return message;
     }
 
     sendButton.addEventListener('click', async () => {
@@ -147,8 +126,7 @@ html_content = '''<!DOCTYPE html>
         appendMessage(text, 'user');
         userInput.value = '';
 
-        const loaderId = 'loader-' + Date.now();
-        appendMessage("Sto accedendo ai suoi ricordi...<span class='typing-indicator'><span></span><span></span><span></span></span>", 'bot', loaderId);
+        const thinkingMsg = appendMessage('Sto accedendo ai suoi ricordi...', 'thinking');
 
         try {
           const response = await fetch('/.netlify/functions/gptHandler', {
@@ -158,24 +136,20 @@ html_content = '''<!DOCTYPE html>
           });
 
           const data = await response.json();
-          removeMessageById(loaderId);
+          thinkingMsg.remove();
           appendMessage(data.reply || "Errore nella risposta.", 'bot');
-        } catch (err) {
-          removeMessageById(loaderId);
-          appendMessage("Si è verificato un errore.", 'bot');
+        } catch (error) {
+          thinkingMsg.remove();
+          appendMessage("Errore di connessione.", 'bot');
         }
       }
     });
 
     userInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') sendButton.click();
+      if (e.key === 'Enter') {
+        sendButton.click();
+      }
     });
   </script>
 </body>
 </html>
-'''
-
-with open(html_path, "w") as f:
-    f.write(html_content)
-
-html_path
