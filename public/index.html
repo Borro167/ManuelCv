@@ -3,12 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Chat</title>
+  <title>Chat Manuel Ferro</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
     body {
       margin: 0;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -18,7 +14,6 @@
       align-items: center;
       height: 100vh;
     }
-
     .chat-container {
       display: flex;
       flex-direction: column;
@@ -31,7 +26,6 @@
       overflow: hidden;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
-
     .messages {
       flex: 1;
       padding: 16px;
@@ -39,7 +33,6 @@
       display: flex;
       flex-direction: column;
     }
-
     .message {
       margin-bottom: 12px;
       padding: 10px 14px;
@@ -48,54 +41,24 @@
       line-height: 1.4;
       word-wrap: break-word;
     }
-
     .message.user {
       background-color: #007bff;
       color: #fff;
       align-self: flex-end;
       border-bottom-right-radius: 0;
     }
-
     .message.bot {
       background-color: #e9ecef;
       color: #333;
       align-self: flex-start;
       border-bottom-left-radius: 0;
     }
-
-    .message.thinking {
-      align-self: flex-start;
-      font-style: italic;
-      color: #888;
-      font-size: 0.9em;
-      background: none;
-      padding: 0;
-      margin-bottom: 10px;
-      display: flex;
-      gap: 1px;
-    }
-
-    .message.thinking span {
-      animation: glow 1.5s infinite;
-      display: inline-block;
-    }
-
-    .message.thinking span:nth-child(n) {
-      animation-delay: calc(0.05s * var(--i));
-    }
-
-    @keyframes glow {
-      0%, 100% { color: #bbb; }
-      50% { color: #333; }
-    }
-
     .input-area {
       display: flex;
       border-top: 1px solid #ddd;
       padding: 8px;
       background-color: #fafafa;
     }
-
     .input-area input {
       flex: 1;
       padding: 10px;
@@ -104,7 +67,6 @@
       outline: none;
       font-size: 1em;
     }
-
     .input-area button {
       margin-left: 8px;
       padding: 10px 16px;
@@ -116,12 +78,9 @@
       font-size: 1em;
       transition: background-color 0.2s ease;
     }
-
     .input-area button:hover {
       background-color: #0056b3;
     }
-
-    /* Responsive per mobile */
     @media (max-width: 600px) {
       .chat-container {
         height: 100vh;
@@ -129,22 +88,18 @@
         box-shadow: none;
         border: none;
       }
-
       .messages {
         padding: 12px;
       }
-
       .message {
         font-size: 0.95em;
         max-width: 85%;
       }
-
       .input-area {
         flex-direction: column;
         gap: 8px;
         padding: 8px;
       }
-
       .input-area input,
       .input-area button {
         width: 100%;
@@ -152,7 +107,6 @@
         padding: 14px;
         margin: 0;
       }
-
       .input-area button {
         margin-left: 0;
       }
@@ -161,71 +115,100 @@
 </head>
 <body>
   <div class="chat-container">
-    <div class="messages" id="messages">
-      <div class="message bot">
-        Ciao! Sono qui per parlarti di Manuel.<br>
-        Di che reparto sei: IT, HR o Ufficio tecnico?
-      </div>
-    </div>
+    <div class="messages" id="messages"></div>
     <div class="input-area">
       <input type="text" id="user-input" placeholder="Scrivi un messaggio..." />
       <button id="send-button">Invia</button>
     </div>
   </div>
-
   <script>
     const messagesContainer = document.getElementById('messages');
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
 
+    // Stato della chat
+    let chatState = {
+      welcomeDone: false,
+      reparto: null,
+      attesaDomanda: false
+    };
+
+    // Mostra messaggio di benvenuto solo all'apertura
+    function showWelcome() {
+      if (!chatState.welcomeDone) {
+        appendMessage(
+          "Ciao! Sono qui per parlarti di Manuel.\nDi che reparto sei: IT, HR o Ufficio tecnico?",
+          'bot'
+        );
+        chatState.welcomeDone = true;
+      }
+    }
+
+    // Aggiunge un messaggio alla chat
     function appendMessage(text, sender) {
       const message = document.createElement('div');
       message.classList.add('message', sender);
-      if (sender === 'thinking') {
-        [...text].forEach((char, i) => {
-          const span = document.createElement('span');
-          span.textContent = char;
-          span.style.setProperty('--i', i);
-          message.appendChild(span);
-        });
-      } else {
-        message.textContent = text;
-      }
+      message.textContent = text;
       messagesContainer.appendChild(message);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      return message;
     }
 
-    sendButton.addEventListener('click', async () => {
-      const text = userInput.value.trim();
-      if (text !== '') {
-        appendMessage(text, 'user');
-        userInput.value = '';
-
-        const thinkingMsg = appendMessage('Sto accedendo ai suoi ricordi...', 'thinking');
-
-        try {
-          const response = await fetch('/.netlify/functions/gptHandler', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text })
-          });
-
-          const data = await response.json();
-          thinkingMsg.remove();
-          appendMessage(data.reply || "Errore nella risposta.", 'bot');
-        } catch (error) {
-          thinkingMsg.remove();
-          appendMessage("Errore di connessione.", 'bot');
-        }
-      }
-    });
-
+    // Gestisce l'invio del messaggio utente
+    sendButton.addEventListener('click', onUserSend);
     userInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        sendButton.click();
-      }
+      if (e.key === 'Enter') sendButton.click();
     });
+
+    // Logica principale invio
+    function onUserSend() {
+      const text = userInput.value.trim();
+      if (!text) return;
+      appendMessage(text, "user");
+      userInput.value = "";
+
+      // Primo step: attesa del reparto
+      if (!chatState.reparto) {
+        const norm = text.toLowerCase();
+        let reply = "";
+        if (norm === "hr") reply = "Lavorare in HR significa saper leggere le persone: una competenza preziosa.";
+        else if (norm === "it") reply = "Nel mondo IT contano logica, struttura e adattamento rapido.";
+        else if (norm === "ingegneria" || norm === "ufficio tecnico") reply = "Ingegneria è precisione, metodo e concretezza.";
+        if (reply) {
+          chatState.reparto = norm;
+          appendMessage(reply, "bot");
+          setTimeout(() => {
+            appendMessage("Cosa vuoi sapere di Manuel?", "bot");
+            chatState.attesaDomanda = true;
+          }, 400);
+        } else {
+          appendMessage("Per favore, indica solo il reparto: HR, IT o Ufficio tecnico.", "bot");
+        }
+        return;
+      }
+
+      // Se domanda fuori da Manuel
+      if (chatState.attesaDomanda && !text.toLowerCase().includes("manuel")) {
+        appendMessage("Il mio padrone non permette che tu acceda alla conoscenza del mondo tramite me.", "bot");
+        return;
+      }
+
+      // Risposta su Manuel, personalizzata per reparto
+      if (chatState.attesaDomanda) {
+        let risposta = "";
+        if (chatState.reparto === "hr") {
+          risposta = "Manuel ha affrontato l’università lavorando a tempo pieno come pizzaiolo. Ha imparato a organizzarsi in condizioni non ideali, studiando nei ritagli di tempo. Questa esperienza lo ha reso lucido, concreto e metodico. È una figura affidabile, costruita su disciplina e tenuta mentale.";
+        } else if (chatState.reparto === "it") {
+          risposta = "Manuel ha sviluppato script Python e tool eseguibili per semplificare analisi FEM. Ha integrato modelli AI conversazionali nei flussi tecnici. È una figura ibrida che comprende sia il linguaggio degli ingegneri che quello degli sviluppatori.";
+        } else if (chatState.reparto === "ingegneria" || chatState.reparto === "ufficio tecnico") {
+          risposta = "Lavora su FEM statico e dinamico (Ansys/Nastran). Modella secondo normativa e scrive tool Python per velocizzare analisi e report. Non improvvisa: studia, verifica, automatizza. Ha lavorato anche in piping e CFD in precedenza.";
+        }
+        appendMessage(risposta, "bot");
+        chatState.attesaDomanda = false;
+      }
+    }
+
+    // Mostra il benvenuto al caricamento
+    showWelcome();
   </script>
 </body>
 </html>
