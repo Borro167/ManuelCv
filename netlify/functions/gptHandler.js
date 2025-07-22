@@ -12,31 +12,39 @@ exports.handler = async (event) => {
   try {
     const body = JSON.parse(event.body);
     const userMessage = body.message;
+    let threadId = body.threadId;
 
-    const thread = await openai.beta.threads.create();
+    // Se non esiste un thread passato, creane uno nuovo
+    if (!threadId) {
+      const newThread = await openai.beta.threads.create();
+      threadId = newThread.id;
+    }
 
-    await openai.beta.threads.messages.create(thread.id, {
+    await openai.beta.threads.messages.create(threadId, {
       role: "user",
       content: userMessage,
     });
 
-    const run = await openai.beta.threads.runs.create(thread.id, {
+    const run = await openai.beta.threads.runs.create(threadId, {
       assistant_id: process.env.OPENAI_ASSISTANT_ID,
     });
 
     let completedRun;
     while (true) {
-      completedRun = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      completedRun = await openai.beta.threads.runs.retrieve(threadId, run.id);
       if (completedRun.status === "completed") break;
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
-    const messages = await openai.beta.threads.messages.list(thread.id);
+    const messages = await openai.beta.threads.messages.list(threadId);
     const assistantMessage = messages.data.find((msg) => msg.role === "assistant");
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ reply: assistantMessage.content[0].text.value }),
+      body: JSON.stringify({
+        reply: assistantMessage.content[0].text.value,
+        threadId,
+      }),
     };
   } catch (err) {
     console.error(err);
