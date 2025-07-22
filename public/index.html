@@ -117,7 +117,7 @@
   <div class="chat-container">
     <div class="messages" id="messages"></div>
     <div class="input-area">
-      <input type="text" id="user-input" placeholder="Scrivi un messaggio..." />
+      <input type="text" id="user-input" placeholder="Scrivi un messaggio..." autocomplete="off" />
       <button id="send-button">Invia</button>
     </div>
   </div>
@@ -131,10 +131,8 @@
       welcomeDone: false,
       reparto: null
     };
+    let currentThreadId = null;
 
-    let currentThreadId = null; // PER LA CONVERSAZIONE CONTINUA
-
-    // Mostra messaggio di benvenuto solo all'apertura
     function showWelcome() {
       if (!chatState.welcomeDone) {
         appendMessage(
@@ -145,7 +143,6 @@
       }
     }
 
-    // Aggiunge un messaggio alla chat
     function appendMessage(text, sender) {
       const message = document.createElement('div');
       message.classList.add('message', sender);
@@ -154,38 +151,13 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // Gestisce l'invio del messaggio utente
     sendButton.addEventListener('click', onUserSend);
     userInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') sendButton.click();
     });
 
-    // Logica principale invio
-    function onUserSend() {
-      const text = userInput.value.trim();
-      if (!text) return;
-      appendMessage(text, "user");
-      userInput.value = "";
-
-      // Primo step: attesa del reparto
-      if (!chatState.reparto) {
-        const norm = text.toLowerCase();
-        if (norm === "hr" || norm === "it" || norm === "ingegneria" || norm === "ufficio tecnico") {
-          chatState.reparto = norm;
-          appendMessage("Cosa vuoi sapere di Manuel?", "bot");
-        } else {
-          appendMessage("Per favore, indica solo il reparto: HR, IT o Ufficio tecnico.", "bot");
-        }
-        return;
-      }
-
-      // Dopo la scelta reparto, ogni domanda va SOLO a OpenAI Assistant
-      callOpenAIAssistant(text, chatState.reparto);
-    }
-
-    // Chiamata API verso backend/assistant
     async function callOpenAIAssistant(userText, reparto) {
-      appendMessage("Sto pensando...", "bot"); // Feedback visivo
+      appendMessage("Sto pensando...", "bot");
       try {
         const response = await fetch('/api/assistant', {
           method: 'POST',
@@ -197,23 +169,41 @@
           headers: { 'Content-Type': 'application/json' }
         });
         const data = await response.json();
-
         // Rimuove "Sto pensando..."
-        const lastMsg = messagesContainer.lastChild;
-        if (lastMsg && lastMsg.textContent === "Sto pensando...") {
-          messagesContainer.removeChild(lastMsg);
+        const thinking = Array.from(messagesContainer.getElementsByClassName('bot')).pop();
+        if (thinking && thinking.textContent === "Sto pensando...") {
+          thinking.remove();
         }
-
         appendMessage(data.reply, "bot");
         if (data.thread_id) {
           currentThreadId = data.thread_id;
         }
       } catch (e) {
-        appendMessage("Errore nella comunicazione con il server.", "bot");
+        appendMessage("Errore di connessione o backend.", "bot");
       }
     }
 
-    // Mostra il benvenuto al caricamento
+    function onUserSend() {
+      const text = userInput.value.trim();
+      if (!text) return;
+      appendMessage(text, "user");
+      userInput.value = "";
+
+      if (!chatState.reparto) {
+        const norm = text.toLowerCase();
+        if (norm === "hr" || norm === "it" || norm === "ingegneria" || norm === "ufficio tecnico") {
+          chatState.reparto = norm;
+          appendMessage("Cosa vuoi sapere di Manuel?", "bot");
+        } else {
+          appendMessage("Per favore, indica solo il reparto: HR, IT o Ufficio tecnico.", "bot");
+        }
+        return;
+      }
+
+      // Tutto dopo la scelta reparto va all'assistente OpenAI
+      callOpenAIAssistant(text, chatState.reparto);
+    }
+
     showWelcome();
   </script>
 </body>
