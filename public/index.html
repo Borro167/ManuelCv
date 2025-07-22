@@ -186,12 +186,6 @@
         return;
       }
 
-      // Se domanda fuori da Manuel
-      if (chatState.attesaDomanda && !text.toLowerCase().includes("manuel")) {
-        appendMessage("Il mio padrone non permette che tu acceda alla conoscenza del mondo tramite me.", "bot");
-        return;
-      }
-
       // Risposta su Manuel, personalizzata per reparto
       if (chatState.attesaDomanda) {
         let risposta = "";
