@@ -178,6 +178,9 @@
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
 
+    // Recupera l'ID del thread salvato, se presente
+    let threadId = localStorage.getItem('threadId');
+
     function appendMessage(text, sender) {
       const message = document.createElement('div');
       message.classList.add('message', sender);
@@ -208,11 +211,17 @@
           const response = await fetch('/.netlify/functions/gptHandler', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text })
+            body: JSON.stringify({ message: text, threadId })
           });
 
           const data = await response.json();
           thinkingMsg.remove();
+
+          if (data.threadId) {
+            threadId = data.threadId;
+            localStorage.setItem('threadId', threadId);
+          }
+
           appendMessage(data.reply || "Errore nella risposta.", 'bot');
         } catch (error) {
           thinkingMsg.remove();
