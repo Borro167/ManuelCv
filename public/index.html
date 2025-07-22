@@ -129,9 +129,10 @@
     // Stato della chat
     let chatState = {
       welcomeDone: false,
-      reparto: null,
-      attesaDomanda: false
+      reparto: null
     };
+
+    let currentThreadId = null; // PER LA CONVERSAZIONE CONTINUA
 
     // Mostra messaggio di benvenuto solo all'apertura
     function showWelcome() {
@@ -169,35 +170,46 @@
       // Primo step: attesa del reparto
       if (!chatState.reparto) {
         const norm = text.toLowerCase();
-        let reply = "";
-        if (norm === "hr") reply = "Lavorare in HR significa saper leggere le persone: una competenza preziosa.";
-        else if (norm === "it") reply = "Nel mondo IT contano logica, struttura e adattamento rapido.";
-        else if (norm === "ingegneria" || norm === "ufficio tecnico") reply = "Ingegneria è precisione, metodo e concretezza.";
-        if (reply) {
+        if (norm === "hr" || norm === "it" || norm === "ingegneria" || norm === "ufficio tecnico") {
           chatState.reparto = norm;
-          appendMessage(reply, "bot");
-          setTimeout(() => {
-            appendMessage("Cosa vuoi sapere di Manuel?", "bot");
-            chatState.attesaDomanda = true;
-          }, 400);
+          appendMessage("Cosa vuoi sapere di Manuel?", "bot");
         } else {
           appendMessage("Per favore, indica solo il reparto: HR, IT o Ufficio tecnico.", "bot");
         }
         return;
       }
 
-      // Risposta su Manuel, personalizzata per reparto
-      if (chatState.attesaDomanda) {
-        let risposta = "";
-        if (chatState.reparto === "hr") {
-          risposta = "Manuel ha affrontato l’università lavorando a tempo pieno come pizzaiolo. Ha imparato a organizzarsi in condizioni non ideali, studiando nei ritagli di tempo. Questa esperienza lo ha reso lucido, concreto e metodico. È una figura affidabile, costruita su disciplina e tenuta mentale.";
-        } else if (chatState.reparto === "it") {
-          risposta = "Manuel ha sviluppato script Python e tool eseguibili per semplificare analisi FEM. Ha integrato modelli AI conversazionali nei flussi tecnici. È una figura ibrida che comprende sia il linguaggio degli ingegneri che quello degli sviluppatori.";
-        } else if (chatState.reparto === "ingegneria" || chatState.reparto === "ufficio tecnico") {
-          risposta = "Lavora su FEM statico e dinamico (Ansys/Nastran). Modella secondo normativa e scrive tool Python per velocizzare analisi e report. Non improvvisa: studia, verifica, automatizza. Ha lavorato anche in piping e CFD in precedenza.";
+      // Dopo la scelta reparto, ogni domanda va SOLO a OpenAI Assistant
+      callOpenAIAssistant(text, chatState.reparto);
+    }
+
+    // Chiamata API verso backend/assistant
+    async function callOpenAIAssistant(userText, reparto) {
+      appendMessage("Sto pensando...", "bot"); // Feedback visivo
+      try {
+        const response = await fetch('/api/assistant', {
+          method: 'POST',
+          body: JSON.stringify({
+            message: userText,
+            reparto: reparto,
+            thread_id: currentThreadId
+          }),
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+
+        // Rimuove "Sto pensando..."
+        const lastMsg = messagesContainer.lastChild;
+        if (lastMsg && lastMsg.textContent === "Sto pensando...") {
+          messagesContainer.removeChild(lastMsg);
         }
-        appendMessage(risposta, "bot");
-        chatState.attesaDomanda = false;
+
+        appendMessage(data.reply, "bot");
+        if (data.thread_id) {
+          currentThreadId = data.thread_id;
+        }
+      } catch (e) {
+        appendMessage("Errore nella comunicazione con il server.", "bot");
       }
     }
 
