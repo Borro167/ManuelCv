@@ -3,12 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Chat</title>
+  <title>Chat Manuel Assistant</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -18,7 +15,6 @@
       align-items: center;
       height: 100vh;
     }
-
     .chat-container {
       display: flex;
       flex-direction: column;
@@ -31,7 +27,6 @@
       overflow: hidden;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
-
     .messages {
       flex: 1;
       padding: 16px;
@@ -39,7 +34,6 @@
       display: flex;
       flex-direction: column;
     }
-
     .message {
       margin-bottom: 12px;
       padding: 10px 14px;
@@ -48,21 +42,18 @@
       line-height: 1.4;
       word-wrap: break-word;
     }
-
     .message.user {
       background-color: #007bff;
       color: #fff;
       align-self: flex-end;
       border-bottom-right-radius: 0;
     }
-
     .message.bot {
       background-color: #e9ecef;
       color: #333;
       align-self: flex-start;
       border-bottom-left-radius: 0;
     }
-
     .message.thinking {
       align-self: flex-start;
       font-style: italic;
@@ -74,28 +65,23 @@
       display: flex;
       gap: 1px;
     }
-
     .message.thinking span {
       animation: glow 1.5s infinite;
       display: inline-block;
     }
-
     .message.thinking span:nth-child(n) {
       animation-delay: calc(0.05s * var(--i));
     }
-
     @keyframes glow {
       0%, 100% { color: #bbb; }
       50% { color: #333; }
     }
-
     .input-area {
       display: flex;
       border-top: 1px solid #ddd;
       padding: 8px;
       background-color: #fafafa;
     }
-
     .input-area input {
       flex: 1;
       padding: 10px;
@@ -104,7 +90,6 @@
       outline: none;
       font-size: 1em;
     }
-
     .input-area button {
       margin-left: 8px;
       padding: 10px 16px;
@@ -116,12 +101,9 @@
       font-size: 1em;
       transition: background-color 0.2s ease;
     }
-
     .input-area button:hover {
       background-color: #0056b3;
     }
-
-    /* Responsive per mobile */
     @media (max-width: 600px) {
       .chat-container {
         height: 100vh;
@@ -129,22 +111,13 @@
         box-shadow: none;
         border: none;
       }
-
-      .messages {
-        padding: 12px;
-      }
-
-      .message {
-        font-size: 0.95em;
-        max-width: 85%;
-      }
-
+      .messages { padding: 12px; }
+      .message { font-size: 0.95em; max-width: 85%; }
       .input-area {
         flex-direction: column;
         gap: 8px;
         padding: 8px;
       }
-
       .input-area input,
       .input-area button {
         width: 100%;
@@ -152,10 +125,7 @@
         padding: 14px;
         margin: 0;
       }
-
-      .input-area button {
-        margin-left: 0;
-      }
+      .input-area button { margin-left: 0; }
     }
   </style>
 </head>
@@ -163,12 +133,15 @@
   <div class="chat-container">
     <div class="messages" id="messages">
       <div class="message bot">
-        Ciao! Sono qui per parlarti di Manuel.<br>
-        Di che reparto sei: IT, HR o Ufficio tecnico?
+        Questo non è un chatbot qualsiasi.<br>
+        Sei collegato a un <strong>assistant AI personalizzato</strong> (<span style="font-family:monospace">OpenAI Assistant ID</span>), progettato per fornirti informazioni solo su Manuel e sul suo percorso.<br>
+        Puoi chiedere qualsiasi cosa: tutte le domande saranno elaborate direttamente dall’AI, senza filtri locali.<br>
+        <br>
+        Inizia pure la conversazione.
       </div>
     </div>
     <div class="input-area">
-      <input type="text" id="user-input" placeholder="Scrivi un messaggio..." />
+      <input type="text" id="user-input" placeholder="Scrivi un messaggio..." autocomplete="off" />
       <button id="send-button">Invia</button>
     </div>
   </div>
@@ -222,9 +195,7 @@
     });
 
     userInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        sendButton.click();
-      }
+      if (e.key === 'Enter') sendButton.click();
     });
   </script>
 </body>
