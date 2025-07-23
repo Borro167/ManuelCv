@@ -3,10 +3,130 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Assistant di Manuel</title>
+  <title>Chat Manuel Assistant</title>
   <style>
-    /* ... [stili identici o migliorati, vedi suggerimenti precedenti] ... */
-    /* Vedi sotto per i dettagli, puoi riutilizzare i tuoi ma puliti */
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f2f2f2;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 600px;
+      height: 90vh;
+      border: 1px solid #ddd;
+      background-color: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .messages {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .message {
+      margin-bottom: 12px;
+      padding: 10px 14px;
+      border-radius: 16px;
+      max-width: 70%;
+      line-height: 1.4;
+      word-wrap: break-word;
+    }
+    .message.user {
+      background-color: #007bff;
+      color: #fff;
+      align-self: flex-end;
+      border-bottom-right-radius: 0;
+    }
+    .message.bot {
+      background-color: #e9ecef;
+      color: #333;
+      align-self: flex-start;
+      border-bottom-left-radius: 0;
+    }
+    .message.thinking {
+      align-self: flex-start;
+      font-style: italic;
+      color: #888;
+      font-size: 0.9em;
+      background: none;
+      padding: 0;
+      margin-bottom: 10px;
+      display: flex;
+      gap: 1px;
+    }
+    .message.thinking span {
+      animation: glow 1.5s infinite;
+      display: inline-block;
+    }
+    .message.thinking span:nth-child(n) {
+      animation-delay: calc(0.05s * var(--i));
+    }
+    @keyframes glow {
+      0%, 100% { color: #bbb; }
+      50% { color: #333; }
+    }
+    .input-area {
+      display: flex;
+      border-top: 1px solid #ddd;
+      padding: 8px;
+      background-color: #fafafa;
+    }
+    .input-area input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 20px;
+      outline: none;
+      font-size: 1em;
+    }
+    .input-area button {
+      margin-left: 8px;
+      padding: 10px 16px;
+      border: none;
+      background-color: #007bff;
+      color: #fff;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 1em;
+      transition: background-color 0.2s ease;
+    }
+    .input-area button:hover {
+      background-color: #0056b3;
+    }
+    @media (max-width: 600px) {
+      .chat-container {
+        height: 100vh;
+        border-radius: 0;
+        box-shadow: none;
+        border: none;
+      }
+      .messages { padding: 12px; }
+      .message { font-size: 0.95em; max-width: 85%; }
+      .input-area {
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px;
+      }
+      .input-area input,
+      .input-area button {
+        width: 100%;
+        font-size: 1em;
+        padding: 14px;
+        margin: 0;
+      }
+      .input-area button { margin-left: 0; }
+    }
   </style>
 </head>
 <body>
@@ -14,72 +134,79 @@
     <div class="messages" id="messages">
       <div class="message bot" id="welcome-message"></div>
     </div>
-    <form class="input-area" id="chat-form" autocomplete="off">
-      <input type="text" id="user-input" placeholder="Scrivi un messaggio..." autocomplete="off" aria-label="Scrivi un messaggio" required />
-      <button id="send-button" type="submit">Invia</button>
-    </form>
+    <div class="input-area">
+      <input type="text" id="user-input" placeholder="Scrivi un messaggio..." autocomplete="off" />
+      <button id="send-button">Invia</button>
+    </div>
   </div>
-  <script type="module">
+
+  <script>
     const messagesContainer = document.getElementById('messages');
     const userInput = document.getElementById('user-input');
     const sendButton = document.getElementById('send-button');
-    const chatForm = document.getElementById('chat-form');
 
-    // Messaggio contestualizzato
+    // Messaggio di benvenuto migliorato e più contestualizzato
     document.getElementById('welcome-message').innerHTML = `
-      👋 Ciao! Sono l’assistente digitale di Manuel.<br>
-      in un mondo di AI dove tutti i CV si sono uniformati,il mio a padrone ha deciso di fare qualcosa che rende uniformi per distinguersi, ho accesso ai suoi ricordi chiedimi pure quello che vuoi.<br><br>
-      <small>(Nota: i dati restano privati e sicuri. Usa la chat per ogni domanda.)</small>
+      Questo non è un chatbot qualsiasi.<br>
+      Sono l'assistente di Manuel: posso accedere ai suoi ricordi professionali.<br>
+      Dicci chi sei (HR? IT? Ufficio tecnico?) oppure scrivi direttamente la tua domanda.<br>
+      Ti risponderò adattando il mio stile e i contenuti al tuo ruolo!
     `;
 
     function appendMessage(text, sender) {
       const message = document.createElement('div');
       message.classList.add('message', sender);
-      message.textContent = text;
+      if (sender === 'thinking') {
+        // Qui scrivi "Entro nei suoi ricordi..." con effetto
+        [...text].forEach((char, i) => {
+          const span = document.createElement('span');
+          span.textContent = char;
+          span.style.setProperty('--i', i);
+          message.appendChild(span);
+        });
+      } else {
+        message.textContent = text;
+      }
       messagesContainer.appendChild(message);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
       return message;
     }
 
-    // Loading "pensiero"
-    function showThinking() {
-      const thinking = document.createElement('div');
-      thinking.className = 'message thinking';
-      thinking.innerHTML = `<span>Sto pensando...</span>`;
-      messagesContainer.appendChild(thinking);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      return thinking;
-    }
-
-    chatForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
+    sendButton.addEventListener('click', async () => {
       const text = userInput.value.trim();
-      if (!text) return;
-      appendMessage(text, 'user');
-      userInput.value = '';
-      userInput.disabled = true;
-      sendButton.disabled = true;
+      if (text !== '') {
+        appendMessage(text, 'user');
+        userInput.value = '';
+        userInput.disabled = true;
+        sendButton.disabled = true;
 
-      const thinkingMsg = showThinking();
-      try {
-        const response = await fetch('/.netlify/functions/gptHandler', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text })
-        });
-        const data = await response.json();
-        thinkingMsg.remove();
-        appendMessage(data.reply || "Nessuna risposta disponibile.", 'bot');
-      } catch (error) {
-        thinkingMsg.remove();
-        appendMessage("Errore di connessione. Riprova tra poco.", 'bot');
+        // Mostra thinking animato con testo richiesto
+        const thinkingMsg = appendMessage('Entro nei suoi ricordi...', 'thinking');
+
+        try {
+          const response = await fetch('/.netlify/functions/gptHandler', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text })
+          });
+
+          const data = await response.json();
+          thinkingMsg.remove();
+          appendMessage(data.reply || "Errore nella risposta.", 'bot');
+        } catch (error) {
+          thinkingMsg.remove();
+          appendMessage("Errore di connessione.", 'bot');
+        }
+
+        userInput.disabled = false;
+        sendButton.disabled = false;
+        userInput.focus();
       }
-      userInput.disabled = false;
-      sendButton.disabled = false;
-      userInput.focus();
     });
 
-    userInput.focus();
+    userInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendButton.click();
+    });
   </script>
 </body>
 </html>
