@@ -1,52 +1,60 @@
-// gptHandler.js
-// Versione aggiornata con salvataggio reparto e gestione memoria base
+import { OpenAI } from "openai";
 
-import OpenAI from "openai";
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-// Variabile per memorizzare il reparto dell'utente
-let userDepartment = null;
-
-export async function handleMessage(userInput) {
-  // Controlla se il reparto non è ancora stato salvato
-  if (!userDepartment) {
-    // Normalizza l'input utente
-    const lowerInput = userInput.trim().toLowerCase();
-
-    // Possibili modi di scrivere HR
-    const deptKeywords = ["hr", "risorse umane", "human resources"];
-
-    if (deptKeywords.includes(lowerInput)) {
-      userDepartment = "Risorse Umane";
-      return "Perfetto, reparto salvato! Vuoi sapere qualcosa su Manuel?";
-    } else {
-      return "In quale reparto lavori?";
-    }
+export async function handler(event) {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method Not Allowed" };
   }
 
-  // Se il reparto è già noto, includilo nel contesto e chiedi a OpenAI
-  const messages = [
-    {
-      role: "system",
-      content: `Sei l'assistente personale di Manuel. L'utente lavora nel reparto ${userDepartment}. Usa questo dato per rispondere alle domande.`,
-    },
-    {
-      role: "user",
-      content: userInput,
-    },
-  ];
+  if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_ASSISTANT_ID) {
+    return { statusCode: 500, body: "Manca una variabile di ambiente (OPENAI_API_KEY o OPENAI_ASSISTANT_ID)." };
+  }
 
   try {
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages,
-      temperature: 0.8,
-      max_tokens: 300,
+    const body = JSON.parse(event.body);
+    const userMessage = body.message;
+
+    // 1. Crea una thread
+    const thread = await openai.beta.threads.create();
+
+    // 2. Inserisci il messaggio dell'utente nella thread
+    await openai.beta.threads.messages.create(thread.id, {
+      role: "user",
+      content: userMessage,
     });
 
-    return completion.choices[0].message.content;
-  } catch (error) {
-    console.error("Errore nella chiamata API:", error);
-    return "Si è verificato un errore, riprova più tardi.";
+    // 3. Esegui la "run" dell'assistente con il suo ID
+    const run = await openai.beta.threads.runs.create(thread.id, {
+      assistant_id: process.env.OPENAI_ASSISTANT_ID,
+    });
+
+    // 4. Polling: aspetta che il run sia completo
+    let completedRun;
+    let attempts = 0;
+    do {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      completedRun = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      attempts++;
+      if (attempts > 15) throw new Error("Timeout risposta AI.");
+    } while (completedRun.status !== "completed");
+
+    // 5. Ottieni il messaggio dell'assistente dalla thread
+    const messages = await openai.beta.threads.messages.list(thread.id);
+    // Prendi l’ultimo messaggio di tipo “assistant”
+    const assistantMsg = messages.data.reverse().find(m => m.role === "assistant");
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ reply: assistantMsg?.content?.[0]?.text?.value || "Risposta non trovata." }),
+    };
+  } catch (err) {
+    console.error(err);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Errore interno nel server: " + (err.message || "Unknown") }),
+    };
   }
 }
