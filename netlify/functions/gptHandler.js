@@ -10,51 +10,62 @@ export async function handler(event) {
   }
 
   if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_ASSISTANT_ID) {
-    return { statusCode: 500, body: "Manca una variabile di ambiente (OPENAI_API_KEY o OPENAI_ASSISTANT_ID)." };
+    return {
+      statusCode: 500,
+      body: "Manca una variabile di ambiente (OPENAI_API_KEY o OPENAI_ASSISTANT_ID).",
+    };
   }
 
   try {
     const body = JSON.parse(event.body);
     const userMessage = body.message;
+    let threadId = body.thread_id;
 
-    // 1. Crea una thread
-    const thread = await openai.beta.threads.create();
+    // ✅ Se non esiste un threadId, creane uno nuovo
+    if (!threadId) {
+      const thread = await openai.beta.threads.create();
+      threadId = thread.id;
+    }
 
-    // 2. Inserisci il messaggio dell'utente nella thread
-    await openai.beta.threads.messages.create(thread.id, {
+    // Inserisci il messaggio dell'utente nella stessa thread
+    await openai.beta.threads.messages.create(threadId, {
       role: "user",
       content: userMessage,
     });
 
-    // 3. Esegui la "run" dell'assistente con il suo ID
-    const run = await openai.beta.threads.runs.create(thread.id, {
+    // Esegui la run dell'assistente
+    const run = await openai.beta.threads.runs.create(threadId, {
       assistant_id: process.env.OPENAI_ASSISTANT_ID,
     });
 
-    // 4. Polling: aspetta che il run sia completo
-    let completedRun;
+    // Polling per ottenere la risposta
+    let runStatus;
     let attempts = 0;
     do {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      completedRun = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      runStatus = await openai.beta.threads.runs.retrieve(threadId, run.id);
       attempts++;
-      if (attempts > 15) throw new Error("Timeout risposta AI.");
-    } while (completedRun.status !== "completed");
+      if (attempts > 20) {
+        throw new Error("Timeout nella risposta dell'assistente.");
+      }
+    } while (runStatus.status === "in_progress");
 
-    // 5. Ottieni il messaggio dell'assistente dalla thread
-    const messages = await openai.beta.threads.messages.list(thread.id);
-    // Prendi l’ultimo messaggio di tipo “assistant”
-    const assistantMsg = messages.data.reverse().find(m => m.role === "assistant");
+    if (runStatus.status !== "completed") {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "Errore durante l'esecuzione della run." }),
+      };
+    }
+
+    // Recupera i messaggi finali
+    const messages = await openai.beta.threads.messages.list(threadId);
+    const assistantMessage = messages.data[0].content[0].text.value;
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ reply: assistantMsg?.content?.[0]?.text?.value || "Risposta non trovata." }),
+      body: JSON.stringify({ reply: assistantMessage, thread_id: threadId }),
     };
-  } catch (err) {
-    console.error(err);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Errore interno nel server: " + (err.message || "Unknown") }),
-    };
+  } catch (error) {
+    return { statusCode: 500, body: "Errore: " + error.message };
   }
 }
