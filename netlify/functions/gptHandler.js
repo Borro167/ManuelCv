@@ -1,64 +1,109 @@
-const { OpenAI } = require("openai");
+import { OpenAI } from "openai";
+
+// Qui la memoria è globale (valida solo per questa istanza! In produzione usa DB o altro)
+let summaryMemory = "Nessun contesto precedente.";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-let summaryMemory = "Nessun contesto precedente.";
 
-exports.handler = async function(event, context) {
-  console.log(">>>> GPT Handler START");
+// Funzione per aggiornare il riassunto della chat
+async function aggiornaRiassunto({ oldSummary, userMessage, aiResponse }) {
+  const thread = await openai.beta.threads.create();
+  await openai.beta.threads.messages.create(thread.id, {
+    role: "user",
+    content: "Sei un assistente che aggiorna il riassunto di una conversazione.",
+  });
+  await openai.beta.threads.messages.create(thread.id, {
+    role: "user",
+    content: `
+RIASSUNTO PRECEDENTE: ${oldSummary}
+NUOVO MESSAGGIO UTENTE: ${userMessage}
+RISPOSTA AI: ${aiResponse}
+
+Riscrivi il riassunto in massimo 200 parole, tenendo solo le informazioni importanti per ricordare la conversazione.`,
+  });
+  const run = await openai.beta.threads.runs.create(thread.id, {
+    assistant_id: process.env.OPENAI_ASSISTANT_ID,
+  });
+
+  let completed;
+  let attempts = 0;
+  do {
+    await new Promise(res => setTimeout(res, 1200));
+    completed = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+    attempts++;
+    if (attempts > 10) throw new Error("Timeout aggiornamento riassunto.");
+  } while (completed.status !== "completed");
+
+  const messages = await openai.beta.threads.messages.list(thread.id);
+  const assistantMsg = messages.data.reverse().find(m => m.role === "assistant");
+  return assistantMsg?.content?.[0]?.text?.value || oldSummary;
+}
+
+export async function handler(event) {
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Metodo non consentito" };
+    return { statusCode: 405, body: "Method Not Allowed" };
   }
   if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_ASSISTANT_ID) {
-    console.error("✖ env mancanti");
-    return { statusCode: 500, body: "Missing API_KEY or ASSISTANT_ID." };
+    return { statusCode: 500, body: "Manca una variabile di ambiente." };
   }
+  try {
+    const body = JSON.parse(event.body);
+    const userMessage = body.message;
 
-  return {
-    statusCode: 200,
-    headers: {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-    body: (async function* () {
-      try {
-        const { message: userMessage } = JSON.parse(event.body);
-        console.log("UserMessage:", userMessage);
+    // 1. Crea una nuova thread
+    const thread = await openai.beta.threads.create();
 
-        const thread = await openai.beta.threads.create();
-        await openai.beta.threads.messages.create(thread.id, {
-          role: "user",
-          content: `[CONTESTO RIASSUNTO]: ${summaryMemory}`,
-        });
-        await openai.beta.threads.messages.create(thread.id, {
-          role: "user",
-          content: userMessage,
-        });
+    // 2. Invia il riassunto come messaggio "user" nascosto (il modello lo userà come contesto)
+    await openai.beta.threads.messages.create(thread.id, {
+      role: "user",
+      content: `[CONTESTO RIASSUNTO]: ${summaryMemory}`,
+    });
 
-        const run = await openai.beta.threads.runs.create(thread.id, {
-          assistant_id: process.env.OPENAI_ASSISTANT_ID,
-          stream: true,
-        });
+    // 3. Invia il vero messaggio dell'utente
+    await openai.beta.threads.messages.create(thread.id, {
+      role: "user",
+      content: userMessage,
+    });
 
-        let finalText = "";
-        for await (const chunk of run) {
-          const content = chunk.data?.delta?.content;
-          console.log("➤ CHUNK =", content ? JSON.stringify(content) : "[no content]");
-          if (content) {
-            finalText += content;
-            yield `data: ${content}\n\n`;
-          }
-        }
+    // 4. Run assistant
+    const run = await openai.beta.threads.runs.create(thread.id, {
+      assistant_id: process.env.OPENAI_ASSISTANT_ID,
+    });
 
-        yield "data: [END]\n\n";
-        console.log("Reply COMPLETE:", finalText);
+    // 5. Polling
+    let completedRun;
+    let attempts = 0;
+    do {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      completedRun = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      attempts++;
+      if (attempts > 15) throw new Error("Timeout risposta AI.");
+    } while (completedRun.status !== "completed");
 
-      } catch (err) {
-        console.error("🚨 STREAM ERROR:", err);
-        yield "data: [ERRORE]\n\n";
-      }
-    })(),
-  };
-};
+    // 6. Ottieni risposta AI
+    const messages = await openai.beta.threads.messages.list(thread.id);
+    const assistantMsg = messages.data.reverse().find(m => m.role === "assistant");
+    const aiResponse = assistantMsg?.content?.[0]?.text?.value || "Risposta non trovata.";
+
+    // 7. Aggiorna il riassunto (wait per ora, ma puoi anche lanciare in parallelo)
+    summaryMemory = await aggiornaRiassunto({
+      oldSummary: summaryMemory,
+      userMessage,
+      aiResponse,
+    });
+
+    // 8. Rispondi all'utente
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ reply: aiResponse }),
+    };
+  } catch (err) {
+    console.error("SERVER ERROR:", err);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Errore interno nel server: " + (err.message || "Unknown") }),
+    };
+  }
+}
