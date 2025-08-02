@@ -147,59 +147,86 @@
 
     // Messaggio di benvenuto migliorato e più contestualizzato
     document.getElementById('welcome-message').innerHTML = `
-     In un mondo dove le intelligenze artificiali tendono ad omologare, il mio padrone ha scelto di distinguersi… usando proprio l’AI.
-Sono l’assistente personale di Manuel: posso accedere ai suoi ricordi. Chiedimi ciò che vuoi — ti prometto che non mentirò..<br>
+     In un mondo dove le intelligenze artificiali tendono ad omologare, il mio padrone ha scelto di distinguersi… usando proprio l’AI.<br>
+Sono l’assistente personale di Manuel: posso accedere ai suoi ricordi. Chiedimi ciò che vuoi — ti prometto che non mentirò..
     `;
 
     function appendMessage(text, sender) {
       const message = document.createElement('div');
       message.classList.add('message', sender);
-      if (sender === 'thinking') {
-        // Qui scrivi "Entro nei suoi ricordi..." con effetto
-        [...text].forEach((char, i) => {
-          const span = document.createElement('span');
-          span.textContent = char;
-          span.style.setProperty('--i', i);
-          message.appendChild(span);
-        });
-      } else {
-        message.textContent = text;
-      }
+      message.textContent = text;
       messagesContainer.appendChild(message);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
       return message;
     }
 
-    sendButton.addEventListener('click', async () => {
-      const text = userInput.value.trim();
-      if (text !== '') {
-        appendMessage(text, 'user');
-        userInput.value = '';
-        userInput.disabled = true;
-        sendButton.disabled = true;
+    async function sendMessageStream(text) {
+      appendMessage(text, 'user');
+      userInput.value = '';
+      userInput.disabled = true;
+      sendButton.disabled = true;
 
-        // Mostra thinking animato con testo richiesto
-        const thinkingMsg = appendMessage('Entro nei suoi ricordi...', 'thinking');
+      // Prepara box risposta streaming
+      const botMsg = appendMessage('', 'bot');
 
-        try {
-          const response = await fetch('/.netlify/functions/gptHandler', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text })
-          });
+      try {
+        const response = await fetch('/.netlify/functions/gptHandler', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text })
+        });
 
-          const data = await response.json();
-          thinkingMsg.remove();
-          appendMessage(data.reply || "Errore nella risposta.", 'bot');
-        } catch (error) {
-          thinkingMsg.remove();
-          appendMessage("Errore di connessione.", 'bot');
+        if (!response.body) throw new Error("Streaming non supportato.");
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let botText = '';
+        let partial = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          partial += decoder.decode(value, { stream: true });
+
+          let lines = partial.split('\n\n');
+          partial = lines.pop();
+
+          for (let line of lines) {
+            if (!line.startsWith('data:')) continue;
+            const chunk = line.replace('data: ', '');
+            if (chunk === '[END]') {
+              botMsg.textContent = botText.trim();
+              userInput.disabled = false;
+              sendButton.disabled = false;
+              userInput.focus();
+              return;
+            }
+            if (chunk === '[ERRORE]') {
+              botMsg.textContent = "Errore durante la risposta AI.";
+              userInput.disabled = false;
+              sendButton.disabled = false;
+              userInput.focus();
+              return;
+            }
+            botText += chunk;
+            botMsg.textContent = botText;
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }
         }
-
+      } catch (error) {
+        botMsg.textContent = "Errore di connessione.";
         userInput.disabled = false;
         sendButton.disabled = false;
         userInput.focus();
       }
+      userInput.disabled = false;
+      sendButton.disabled = false;
+      userInput.focus();
+    }
+
+    sendButton.addEventListener('click', async () => {
+      const text = userInput.value.trim();
+      if (text !== '') sendMessageStream(text);
     });
 
     userInput.addEventListener('keydown', (e) => {
