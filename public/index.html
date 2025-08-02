@@ -2,122 +2,104 @@
 <html lang="it">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
-  <title>Chat Manuel Assistant</title>
+  <meta name="viewport" content="width=device-width,initial‑scale=1,user‑scalable=no" />
+  <title>Chat Assistant streaming</title>
   <style>
-    *{box-sizing:border-box;}
-    body{margin:0;font-family:Segoe UI,Tahoma,Geneva,Verdana,sans-serif;background:#f2f2f2;display:flex;justify-content:center;align-items:center;height:100vh;}
-    .chat-container{display:flex;flex-direction:column;width:100%;max-width:600px;height:90vh;border:1px solid #ddd;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.1);}
-    .messages{flex:1;padding:16px;overflow-y:auto;display:flex;flex-direction:column;}
-    .message{margin-bottom:12px;padding:10px 14px;border-radius:16px;max-width:70%;line-height:1.4;word-wrap:break-word;}
-    .message.user{background:#007bff;color:#fff;align-self:flex-end;border-bottom-right-radius:0;}
-    .message.bot{background:#e9ecef;color:#333;align-self:flex-start;border-bottom-left-radius:0;}
+    *{box‑sizing:border‑box;}
+    body{margin:0;font-family:sans-serif;background:#f2f2f2;display:flex;align-items:center;justify-content:center;height:100vh;}
+    .chat{display:flex;flex-direction:column;width:100%;max-width:600px;height:90vh;border:1px solid #ccc;background:#fff;border-radius:8px;overflow:hidden;}
+    .msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;}
+    .msg{margin-bottom:12px;padding:10px 14px;border-radius:16px;max-width:80%;line-height:1.4;word-break:break-word;}
+    .msg.user{align-self:flex-end;background:#007bff;color:#fff;border-bottom-right-radius:0;}
+    .msg.bot{align-self:flex-start;background:#e9ecef;color:#333;border-bottom-left-radius:0;}
     .input-area{display:flex;border-top:1px solid #ddd;padding:8px;background:#fafafa;}
     .input-area input{flex:1;padding:10px;border:1px solid #ccc;border-radius:20px;font-size:1em;outline:none;}
-    .input-area button{margin-left:8px;padding:10px 16px;border:none;background:#007bff;color:#fff;border-radius:20px;cursor:pointer;font-size:1em;transition:background 0.2s;}
+    .input-area button{padding:10px 16px;border:none;background:#007bff;color:#fff;border-radius:20px;margin-left:8px;font-size:1em;cursor:pointer;transition:background 0.2s;}
     .input-area button:hover{background:#0056b3;}
-    @media(max-width:600px){
-      .chat-container{height:100vh;border-radius:0;box-shadow:none;border:none;}
-      .messages{padding:12px;}
-      .message{font-size:0.95em;max-width:85%;}
-      .input-area{flex-direction:column;gap:8px;padding:8px;}
-      .input-area input,.input-area button{width:100%;padding:14px;margin:0;font-size:1em;}
-      .input-area button{margin-left:0;}
+    @media(max-width:600px){.chat{height:100vh;border-radius:0;} .msgs{padding:12px;} .msg{max-width:90%;} .input-area{flex-direction:column;gap:8px;} .input-area button{margin-left:0;}
     }
   </style>
 </head>
 <body>
-  <div class="chat-container">
-    <div class="messages" id="messages">
-      <div class="message bot" id="welcome-message"></div>
+  <div class="chat">
+    <div class="msgs" id="msgs">
+      <div class="msg bot" id="welcome">
+        Ciao! Sono Manuel AI, il tuo assistente personale con memorie. Chiedimi ciò che vuoi.
+      </div>
     </div>
     <div class="input-area">
-      <input type="text" id="user-input" placeholder="Scrivi un messaggio..." autocomplete="off" />
-      <button id="send-button">Invia</button>
+      <input id="usr" placeholder="Scrivi qui..." autocomplete="off" />
+      <button id="btn">Invia</button>
     </div>
   </div>
-
   <script>
-    const container = document.getElementById('messages');
-    const input = document.getElementById('user-input');
-    const btn = document.getElementById('send-button');
+    const msgs = document.getElementById("msgs"),
+          usr = document.getElementById("usr"),
+          btn = document.getElementById("btn");
 
-    document.getElementById('welcome-message').innerHTML =
-      'In un mondo dove le intelligenze artificiali tendono ad omologare, il mio padrone ha scelto di distinguersi… usando proprio l’AI.<br>Sono l’assistente personale di Manuel: posso accedere ai suoi ricordi. Chiedimi ciò che vuoi — ti prometto che non mentirò.';
-
-    function appendMessage(txt, cls) {
-      const div = document.createElement('div');
-      div.classList.add('message', cls);
-      div.textContent = txt;
-      container.appendChild(div);
-      container.scrollTop = container.scrollHeight;
-      return div;
+    function addMsg(text, cls) {
+      const d = document.createElement('div');
+      d.className = 'msg ' + cls;
+      d.textContent = text;
+      msgs.appendChild(d);
+      msgs.scrollTop = msgs.scrollHeight;
+      return d;
     }
 
-    async function handleStream(msg) {
-      appendMessage(msg, 'user');
-      input.value = '';
-      input.disabled = true;
-      btn.disabled = true;
+    async function send(message) {
+      addMsg(message, 'user');
+      usr.value = '';
+      usr.disabled = btn.disabled = true;
+      const bot = addMsg('', 'bot');
 
-      const bot = appendMessage('', 'bot');
       try {
         const res = await fetch('/.netlify/functions/gptHandler', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: msg })
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ message })
         });
-
-        if (!res.body) throw new Error('Streaming non supportato');
+        if (!res.body) throw new Error('Streaming non disponibile');
 
         const reader = res.body.getReader();
-        const dec = new TextDecoder();
-        let text = '', buff = '';
+        const dec = new TextDecoder('utf-8');
+        let buff = '', full = '';
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           buff += dec.decode(value, { stream: true });
-          const parts = buff.split('\n\n');
-          buff = parts.pop();
-          for (const line of parts) {
-            if (!line.startsWith('data:')) continue;
-            const chunk = line.replace(/^data:\s*/, '');
+          const pts = buff.split('\n\n');
+          buff = pts.pop();
+          for (const ln of pts) {
+            if (!ln.startsWith('data:')) continue;
+            const chunk = ln.slice(6);
             if (chunk === '[END]') {
-              bot.textContent = text.trim();
-              input.disabled = false;
-              btn.disabled = false;
-              input.focus();
+              bot.textContent = full.trim();
+              usr.disabled = btn.disabled = false;
+              usr.focus();
               return;
             }
             if (chunk === '[ERRORE]') {
               bot.textContent = 'Errore interno AI.';
-              input.disabled = false;
-              btn.disabled = false;
-              input.focus();
+              usr.disabled = btn.disabled = false;
+              usr.focus();
               return;
             }
-            text += chunk;
-            bot.textContent = text;
-            container.scrollTop = container.scrollHeight;
+            full += chunk;
+            bot.textContent = full;
+            msgs.scrollTop = msgs.scrollHeight;
           }
         }
       } catch (e) {
-        bot.textContent = "Errore di connessione.";
-        input.disabled = false;
-        btn.disabled = false;
-        input.focus();
+        bot.textContent = 'Errore connessione.';
+      } finally {
+        usr.disabled = btn.disabled = false;
+        usr.focus();
       }
     }
 
-    btn.addEventListener('click', () => {
-      const txt = input.value.trim();
-      if (txt) handleStream(txt);
-    });
-
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') btn.click();
-    });
+    btn.onclick = () => usr.value.trim() && send(usr.value.trim());
+    usr.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
   </script>
 </body>
 </html>
