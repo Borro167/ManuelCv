@@ -1,12 +1,13 @@
 import { OpenAI } from "openai";
 
+// Memoria globale (solo per demo, NON persistente su Netlify production!)
 let summaryMemory = "Nessun contesto precedente.";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Funzione riassunto GPT-3.5-Turbo strutturata
+// Riassunto con GPT-3.5 Turbo, strutturato
 async function aggiornaRiassuntoConGPT3({ oldSummary, userMessage, aiResponse }) {
   try {
     const completion = await openai.chat.completions.create({
@@ -59,7 +60,6 @@ export async function handler(event) {
     const userMessage = body.message;
 
     // 1. Crea una nuova thread Assistant (per la risposta AI)
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const thread = await openai.beta.threads.create();
 
     // 2. Invia il riassunto come messaggio di contesto
@@ -79,14 +79,16 @@ export async function handler(event) {
       assistant_id: process.env.OPENAI_ASSISTANT_ID,
     });
 
-    // 5. Polling risposta AI (rapido)
+    // 5. Polling aumentato (max 7,5 sec)
     let completedRun;
     let attempts = 0;
+    const maxAttempts = 25; // 25 x 300ms = 7,5 secondi
+
     do {
       await new Promise((resolve) => setTimeout(resolve, 300));
       completedRun = await openai.beta.threads.runs.retrieve(thread.id, run.id);
       attempts++;
-      if (attempts > 10) throw new Error("Timeout risposta AI.");
+      if (attempts > maxAttempts) throw new Error("Timeout risposta AI.");
     } while (completedRun.status !== "completed");
 
     // 6. Ottieni risposta AI
@@ -108,9 +110,10 @@ export async function handler(event) {
     };
   } catch (err) {
     console.error("SERVER ERROR:", err);
+    // Fallback: rispondi comunque, l’utente non resta bloccato
     return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "Errore interno nel server: " + (err.message || "Unknown") }),
+      statusCode: 200,
+      body: JSON.stringify({ reply: "Sto riscontrando rallentamenti temporanei: riprova tra qualche secondo, per favore." }),
     };
   }
 }
