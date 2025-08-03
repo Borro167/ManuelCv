@@ -1,47 +1,48 @@
 import { OpenAI } from "openai";
 
-// Memoria globale locale. In produzione va sostituita con DB.
 let summaryMemory = "Nessun contesto precedente.";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Aggiornamento riassunto in parallelo
-async function aggiornaRiassunto({ oldSummary, userMessage, aiResponse }) {
+// Funzione riassunto GPT-3.5-Turbo strutturata
+async function aggiornaRiassuntoConGPT3({ oldSummary, userMessage, aiResponse }) {
   try {
-    const thread = await openai.beta.threads.create();
-    await openai.beta.threads.messages.create(thread.id, {
-      role: "user",
-      content: "Sei un assistente che aggiorna il riassunto di una conversazione.",
-    });
-    await openai.beta.threads.messages.create(thread.id, {
-      role: "user",
-      content: `
-RIASSUNTO PRECEDENTE: ${oldSummary}
-NUOVO MESSAGGIO UTENTE: ${userMessage}
-RISPOSTA AI: ${aiResponse}
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: `Aggiorna la memoria conversazionale in modo strutturato.
+Scrivi sempre:
+- Domande fatte (elenco di tutte le domande dell’utente fino ad ora)
+- Risposte date (elenco delle risposte fornite dall'AI fino ad ora)
+- Informazioni scambiate rilevanti riguardo il ruolo dell’assistente (ad esempio capacità, limiti, richieste speciali fatte dall’utente)
 
-Riscrivi il riassunto in massimo 200 parole, tenendo solo le informazioni importanti per ricordare la conversazione.`,
-    });
-    const run = await openai.beta.threads.runs.create(thread.id, {
-      assistant_id: process.env.OPENAI_ASSISTANT_ID,
-    });
+Organizza il riassunto come in un report, aggiorna e integra SOLO con le nuove informazioni di questa interazione, mantenendo lo storico dei punti precedenti. Non ripetere contenuti già inclusi nel riassunto attuale.`
+        },
+        {
+          role: "user",
+          content: `
+RIASSUNTO ATTUALE:
+${oldSummary}
 
-    let completed;
-    let attempts = 0;
-    do {
-      await new Promise(res => setTimeout(res, 300));
-      completed = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-      attempts++;
-      if (attempts > 10) throw new Error("Timeout aggiornamento riassunto.");
-    } while (completed.status !== "completed");
+NUOVA DOMANDA UTENTE:
+${userMessage}
 
-    const messages = await openai.beta.threads.messages.list(thread.id);
-    const assistantMsg = messages.data.reverse().find(m => m.role === "assistant");
-    return assistantMsg?.content?.[0]?.text?.value || oldSummary;
+NUOVA RISPOSTA AI:
+${aiResponse}
+
+Aggiorna le tre sezioni mantenendo tutte le informazioni passate e aggiungi solo quelle nuove:`
+        }
+      ],
+      temperature: 0.2,
+      max_tokens: 700,
+    });
+    return completion.choices[0].message.content.trim();
   } catch (err) {
-    console.error("Errore aggiornaRiassunto:", err);
+    console.error("Errore aggiornaRiassuntoConGPT3:", err);
     return oldSummary;
   }
 }
@@ -57,7 +58,8 @@ export async function handler(event) {
     const body = JSON.parse(event.body);
     const userMessage = body.message;
 
-    // 1. Crea una nuova thread
+    // 1. Crea una nuova thread Assistant (per la risposta AI)
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const thread = await openai.beta.threads.create();
 
     // 2. Invia il riassunto come messaggio di contesto
@@ -77,7 +79,7 @@ export async function handler(event) {
       assistant_id: process.env.OPENAI_ASSISTANT_ID,
     });
 
-    // 5. Polling più rapido
+    // 5. Polling risposta AI (rapido)
     let completedRun;
     let attempts = 0;
     do {
@@ -92,14 +94,14 @@ export async function handler(event) {
     const assistantMsg = messages.data.reverse().find(m => m.role === "assistant");
     const aiResponse = assistantMsg?.content?.[0]?.text?.value || "Risposta non trovata.";
 
-    // 7. Aggiorna il riassunto in background (non blocca la risposta)
-    aggiornaRiassunto({
+    // 7. Aggiorna riassunto in modo BLOCCANTE, PRIMA di rispondere all’utente
+    summaryMemory = await aggiornaRiassuntoConGPT3({
       oldSummary: summaryMemory,
       userMessage,
       aiResponse,
-    }).then(newSummary => { summaryMemory = newSummary; }).catch(console.error);
+    });
 
-    // 8. Rispondi all'utente
+    // 8. Rispondi all'utente (riassunto già aggiornato per il prossimo prompt)
     return {
       statusCode: 200,
       body: JSON.stringify({ reply: aiResponse }),
