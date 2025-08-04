@@ -1,13 +1,13 @@
 import { OpenAI } from "openai";
 
-// Memoria globale (solo per demo, NON persistente su Netlify production!)
-let summaryMemory = "Nessun contesto precedente.";
+// Memoria globale (volatile, non persistente su Netlify Production)
+let summaryMemory = "L'utente che chiede di Manuel è \"Non specificato\". Le domande fatte sono: . Le risposte sono: .";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Riassunto con GPT-3.5 Turbo, strutturato
+// Funzione per aggiornare il riassunto in modo compatto secondo formato richiesto
 async function aggiornaRiassuntoConGPT3({ oldSummary, userMessage, aiResponse }) {
   try {
     const completion = await openai.chat.completions.create({
@@ -15,13 +15,24 @@ async function aggiornaRiassuntoConGPT3({ oldSummary, userMessage, aiResponse })
       messages: [
         {
           role: "system",
-          content: `Aggiorna la memoria conversazionale in modo strutturato.
-Scrivi sempre:
-- Domande fatte (elenco di tutte le domande dell’utente fino ad ora)
-- Risposte date (elenco delle risposte fornite dall'AI fino ad ora)
-- Informazioni scambiate rilevanti riguardo il ruolo dell’assistente (ad esempio capacità, limiti, richieste speciali fatte dall’utente)
+          content: `
+Il tuo compito è AGGIORNARE un breve riassunto della conversazione secondo questo formato fisso:
 
-Organizza il riassunto come in un report, aggiorna e integra SOLO con le nuove informazioni di questa interazione, mantenendo lo storico dei punti precedenti. Non ripetere contenuti già inclusi nel riassunto attuale.`
+L'utente che chiede di Manuel è "[NOME REPARTO, RUOLO, AZIENDA, ecc.]" (anche dedotto dal contesto, oppure scrivi "Non specificato" se non emerge).
+Le domande fatte sono: [elenco sintetico delle domande finora, senza duplicati].
+Le risposte sono: [elenco sintetico delle risposte date dall’AI, senza duplicati, una frase per risposta].
+
+IMPORTANTE:
+- Aggiorna la lista aggiungendo solo le nuove domande o risposte (evita duplicati).
+- NON ripetere cose già incluse.
+- Sintetizza ogni domanda/risposta in poche parole.
+- Mantieni SEMPRE il formato sopra, breve e chiaro.
+
+Esempio:
+L'utente che chiede di Manuel è "HR".
+Le domande fatte sono: "Che competenze ha?", "Che progetti segue?"
+Le risposte sono: "Manuel lavora su progetti di AI.", "Le sue competenze includono Python e prompt engineering."
+`
         },
         {
           role: "user",
@@ -35,11 +46,11 @@ ${userMessage}
 NUOVA RISPOSTA AI:
 ${aiResponse}
 
-Aggiorna le tre sezioni mantenendo tutte le informazioni passate e aggiungi solo quelle nuove:`
+Aggiorna solo se emergono nuove informazioni.`
         }
       ],
-      temperature: 0.2,
-      max_tokens: 700,
+      temperature: 0.1,
+      max_tokens: 300,
     });
     return completion.choices[0].message.content.trim();
   } catch (err) {
@@ -79,10 +90,10 @@ export async function handler(event) {
       assistant_id: process.env.OPENAI_ASSISTANT_ID,
     });
 
-    // 5. Polling aumentato (max 7,5 sec)
+    // 5. Polling più rapido (fino a 5 secondi circa)
     let completedRun;
     let attempts = 0;
-    const maxAttempts = 25; // 25 x 300ms = 7,5 secondi
+    const maxAttempts = 16; // 16 x 300ms ≈ 5s
 
     do {
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -96,21 +107,20 @@ export async function handler(event) {
     const assistantMsg = messages.data.reverse().find(m => m.role === "assistant");
     const aiResponse = assistantMsg?.content?.[0]?.text?.value || "Risposta non trovata.";
 
-    // 7. Aggiorna riassunto in modo BLOCCANTE, PRIMA di rispondere all’utente
+    // 7. Aggiorna riassunto (reparto + domande + risposte)
     summaryMemory = await aggiornaRiassuntoConGPT3({
       oldSummary: summaryMemory,
       userMessage,
       aiResponse,
     });
 
-    // 8. Rispondi all'utente (riassunto già aggiornato per il prossimo prompt)
+    // 8. Rispondi all'utente
     return {
       statusCode: 200,
       body: JSON.stringify({ reply: aiResponse }),
     };
   } catch (err) {
     console.error("SERVER ERROR:", err);
-    // Fallback: rispondi comunque, l’utente non resta bloccato
     return {
       statusCode: 200,
       body: JSON.stringify({ reply: "Sto riscontrando rallentamenti temporanei: riprova tra qualche secondo, per favore." }),
