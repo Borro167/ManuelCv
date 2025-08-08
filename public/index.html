@@ -1,210 +1,356 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Chat Manuel Assistant</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Manuel • Assistente</title>
+  <meta name="description" content="Assistente personale di Manuel: chat avanzata con history, reset, impostazioni e salvataggio thread." />
   <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #f2f2f2;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
+    :root{
+      --bg:#0f1320; --surface:#151a2c; --surface-2:#1c2340; --text:#e9ecf7; --muted:#aab1c7;
+      --primary:#6ea8fe; --accent:#9c86ff; --success:#67e5a1; --danger:#ff7b7b; --warn:#ffd36a;
+      --border:rgba(255,255,255,.08); --shadow:0 12px 30px rgba(0,0,0,.35);
     }
-    .chat-container {
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-      max-width: 600px;
-      height: 90vh;
-      border: 1px solid #ddd;
-      background-color: #fff;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;height:100%}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial;background:var(--bg);color:var(--text)}
+
+    .app{display:grid; grid-template-columns: 280px 1fr; height:100vh}
+    aside{
+      border-right:1px solid var(--border); background:linear-gradient(180deg, #141a2d, #0f1320 55%);
+      padding:14px; overflow:auto;
     }
-    .messages {
-      flex: 1;
-      padding: 16px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-    }
-    .message {
-      margin-bottom: 12px;
-      padding: 10px 14px;
-      border-radius: 16px;
-      max-width: 70%;
-      line-height: 1.4;
-      word-wrap: break-word;
-    }
-    .message.user {
-      background-color: #007bff;
-      color: #fff;
-      align-self: flex-end;
-      border-bottom-right-radius: 0;
-    }
-    .message.bot {
-      background-color: #e9ecef;
-      color: #333;
-      align-self: flex-start;
-      border-bottom-left-radius: 0;
-    }
-    .message.thinking {
-      align-self: flex-start;
-      font-style: italic;
-      color: #888;
-      font-size: 0.9em;
-      background: none;
-      padding: 0;
-      margin-bottom: 10px;
-      display: flex;
-      gap: 1px;
-    }
-    .message.thinking span {
-      animation: glow 1.5s infinite;
-      display: inline-block;
-    }
-    .message.thinking span:nth-child(n) {
-      animation-delay: calc(0.05s * var(--i));
-    }
-    @keyframes glow {
-      0%, 100% { color: #bbb; }
-      50% { color: #333; }
-    }
-    .input-area {
-      display: flex;
-      border-top: 1px solid #ddd;
-      padding: 8px;
-      background-color: #fafafa;
-    }
-    .input-area input {
-      flex: 1;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 20px;
-      outline: none;
-      font-size: 1em;
-    }
-    .input-area button {
-      margin-left: 8px;
-      padding: 10px 16px;
-      border: none;
-      background-color: #007bff;
-      color: #fff;
-      border-radius: 20px;
-      cursor: pointer;
-      font-size: 1em;
-      transition: background-color 0.2s ease;
-    }
-    .input-area button:hover {
-      background-color: #0056b3;
-    }
-    @media (max-width: 600px) {
-      .chat-container {
-        height: 100vh;
-        border-radius: 0;
-        box-shadow: none;
-        border: none;
-      }
-      .messages { padding: 12px; }
-      .message { font-size: 0.95em; max-width: 85%; }
-      .input-area {
-        flex-direction: column;
-        gap: 8px;
-        padding: 8px;
-      }
-      .input-area input,
-      .input-area button {
-        width: 100%;
-        font-size: 1em;
-        padding: 14px;
-        margin: 0;
-      }
-      .input-area button { margin-left: 0; }
+    main{display:flex; flex-direction:column; height:100%}
+
+    /* Sidebar */
+    .brand{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+    .brand .dot{width:10px;height:10px;border-radius:50%;background:var(--success);box-shadow:0 0 10px var(--success)}
+    .brand h1{font-size:16px;margin:0}
+
+    .section-title{font-size:12px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
+
+    .history{display:flex;flex-direction:column;gap:8px}
+    .history button{width:100%;text-align:left;padding:10px 12px;border:1px solid var(--border);background:#12172a;color:var(--text);border-radius:12px;cursor:pointer}
+    .history button.active{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
+
+    .controls{display:flex;gap:8px;margin-top:10px}
+    .controls button, .controls a{flex:1;padding:10px 12px;border:1px solid var(--border);background:#12172a;color:var(--text);border-radius:12px;cursor:pointer;text-decoration:none;text-align:center}
+
+    /* Chat */
+    .chat{flex:1;display:flex;flex-direction:column}
+    .messages{flex:1;overflow:auto;padding:18px 20px}
+    .bubble{max-width:70%;padding:12px 14px;border-radius:14px;margin:8px 0;line-height:1.45}
+    .bubble.user{background:#233059;align-self:flex-end;border-bottom-right-radius:6px}
+    .bubble.bot{background:#1b213b;align-self:flex-start;border-bottom-left-radius:6px}
+
+    .meta{opacity:.6;font-size:12px;margin-top:6px}
+
+    .think{display:inline-flex;gap:6px;opacity:.8}
+    .think i{width:6px;height:6px;border-radius:50%;background:#8891b3;animation:blink 1.2s infinite ease-in-out}
+    .think i:nth-child(2){animation-delay:.15s}
+    .think i:nth-child(3){animation-delay:.3s}
+    @keyframes blink{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
+
+    pre{white-space:pre-wrap;background:#0e1224;border:1px solid var(--border);padding:12px;border-radius:10px;overflow:auto}
+    code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    .copy{display:inline-block;margin-top:6px;font-size:12px;cursor:pointer;opacity:.8}
+
+    .inputbar{display:flex;gap:10px;padding:14px;border-top:1px solid var(--border);background:#0e1224}
+    .inputbar textarea{flex:1;resize:none;max-height:40vh;min-height:46px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:#0f1428;color:var(--text);outline:none}
+    .inputbar button{padding:12px 16px;border:none;border-radius:12px;background:var(--primary);color:#091025;cursor:pointer}
+
+    /* Header */
+    header{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#121831,#0e1326)}
+    .left{display:flex;align-items:center;gap:10px}
+    .pill{border:1px solid var(--border);padding:6px 10px;border-radius:999px;color:var(--muted);font-size:12px}
+    .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;background:var(--success)}
+
+    /* Drawer impostazioni */
+    .drawer{position:fixed;right:16px;top:16px;background:#0e1427;border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:14px;width:320px;max-width:92vw;display:none}
+    .drawer.open{display:block}
+    .row{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+    .row input, .row select, .row textarea{background:#0f172e;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px}
+    .row small{opacity:.7}
+
+    @media (max-width: 900px){
+      .app{grid-template-columns:1fr}
+      aside{display:none}
     }
   </style>
 </head>
 <body>
-  <div class="chat-container">
-    <div class="messages" id="messages">
-      <div class="message bot" id="welcome-message"></div>
+  <div class="app">
+    <aside>
+      <div class="brand"><span class="dot"></span><h1>Manuel • Assistente</h1></div>
+      <div class="section">
+        <div class="section-title">Chat recenti (locale)</div>
+        <div id="history" class="history"></div>
+        <div class="controls">
+          <button id="newChat">Nuova</button>
+          <button id="clearAll">Pulisci</button>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-title">Azioni rapide</div>
+        <div class="controls">
+          <button id="exportBtn">Esporta</button>
+          <a id="helpLink" href="#">Help</a>
+        </div>
+      </div>
+    </aside>
+
+    <main>
+      <header>
+        <div class="left">
+          <div class="pill"><span class="status-dot" id="statusDot"></span><span id="statusText">Pronto</span></div>
+          <div class="pill">Thread: <span id="threadShort">—</span></div>
+        </div>
+        <div class="right">
+          <button id="openSettings" class="pill">Impostazioni</button>
+        </div>
+      </header>
+
+      <div id="chat" class="chat">
+        <div id="messages" class="messages"></div>
+        <div class="inputbar">
+          <textarea id="input" placeholder="Scrivi qui e premi Invio…"></textarea>
+          <button id="send">Invia</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Drawer Impostazioni -->
+  <div id="drawer" class="drawer">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <strong>Impostazioni chat</strong>
+      <button id="closeSettings" class="pill">Chiudi</button>
     </div>
-    <div class="input-area">
-      <input type="text" id="user-input" placeholder="Scrivi un messaggio..." autocomplete="off" />
-      <button id="send-button">Invia</button>
+    <div class="row">
+      <label>"Istruzioni extra" per-run (non tocca l'Assistant)</label>
+      <textarea id="extraInstructions" rows="4" placeholder="Esempio: Rispondi in 2 frasi concise, niente emoji."></textarea>
+      <small>Viene passato a ogni run come override delle instructions.</small>
+    </div>
+    <div class="row">
+      <label>Messaggio di benvenuto (solo UI)</label>
+      <input id="welcomeText" />
+      <small>Solo visuale, non viene inviato all'AI.</small>
+    </div>
+    <div class="row">
+      <button id="saveSettings">Salva impostazioni</button>
     </div>
   </div>
 
   <script>
-    const messagesContainer = document.getElementById('messages');
-    const userInput = document.getElementById('user-input');
-    const sendButton = document.getElementById('send-button');
+    // ======== STATO =========
+    const el = (id) => document.getElementById(id);
+    const messagesEl = el('messages');
+    const inputEl = el('input');
+    const sendBtn = el('send');
+    const historyEl = el('history');
+    const statusDot = el('statusDot');
+    const statusText = el('statusText');
+    const threadShort = el('threadShort');
 
-    // Messaggio di benvenuto migliorato e più contestualizzato
-    document.getElementById('welcome-message').innerHTML = `
-     In un mondo dove le intelligenze artificiali tendono ad omologare, il mio padrone ha scelto di distinguersi… usando proprio l’AI.
-Sono l’assistente personale di Manuel: posso accedere ai suoi ricordi. Chiedimi ciò che vuoi — ti prometto che non mentirò..<br>
-    `;
+    const drawer = el('drawer');
+    el('openSettings').onclick = () => drawer.classList.add('open');
+    el('closeSettings').onclick = () => drawer.classList.remove('open');
 
-    function appendMessage(text, sender) {
-      const message = document.createElement('div');
-      message.classList.add('message', sender);
-      if (sender === 'thinking') {
-        // Qui scrivi "Entro nei suoi ricordi..." con effetto
-        [...text].forEach((char, i) => {
-          const span = document.createElement('span');
-          span.textContent = char;
-          span.style.setProperty('--i', i);
-          message.appendChild(span);
-        });
-      } else {
-        message.textContent = text;
-      }
-      messagesContainer.appendChild(message);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-      return message;
+    const SETTINGS_KEY = 'manuel.settings.v2';
+    const THREAD_KEY = 'manuel.threadId.v2';
+    const CHATLOG_KEY = 'manuel.chatlog.v2';
+
+    let threadId = localStorage.getItem(THREAD_KEY) || null;
+    const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+
+    // Default welcome
+    if (!settings.welcomeText) settings.welcomeText = 'Ciao! Sono l\'assistente personale di Manuel. Dimmi cosa ti serve.';
+
+    // UI: impostazioni
+    el('extraInstructions').value = settings.extraInstructions || '';
+    el('welcomeText').value = settings.welcomeText || '';
+    el('saveSettings').onclick = () => {
+      settings.extraInstructions = el('extraInstructions').value.trim();
+      settings.welcomeText = el('welcomeText').value.trim() || settings.welcomeText;
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      toast('Impostazioni salvate');
+    };
+
+    // ======== UTIL ========
+    function toast(text){
+      statusText.textContent = text;
+      statusDot.style.background = '#67e5a1';
+      setTimeout(()=>{statusText.textContent='Pronto';}, 1200);
     }
 
-    sendButton.addEventListener('click', async () => {
-      const text = userInput.value.trim();
-      if (text !== '') {
-        appendMessage(text, 'user');
-        userInput.value = '';
-        userInput.disabled = true;
-        sendButton.disabled = true;
+    function shortId(id){ return id ? id.slice(0,6)+'…'+id.slice(-4) : '—'; }
 
-        // Mostra thinking animato con testo richiesto
-        const thinkingMsg = appendMessage('Entro nei suoi ricordi...', 'thinking');
+    function addBubble(text, who){
+      const wrap = document.createElement('div');
+      wrap.className = 'bubble ' + (who || 'bot');
+      wrap.innerHTML = renderMarkdown(text);
+      messagesEl.appendChild(wrap);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      enhanceCodeBlocks(wrap);
+      return wrap;
+    }
 
-        try {
-          const response = await fetch('/.netlify/functions/gptHandler', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text })
-          });
+    function addThinking(){
+      const wrap = document.createElement('div');
+      wrap.className = 'bubble bot';
+      wrap.innerHTML = '<span class="think"><i></i><i></i><i></i></span> Sto pensando…';
+      messagesEl.appendChild(wrap);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return wrap;
+    }
 
-          const data = await response.json();
-          thinkingMsg.remove();
-          appendMessage(data.reply || "Errore nella risposta.", 'bot');
-        } catch (error) {
-          thinkingMsg.remove();
-          appendMessage("Errore di connessione.", 'bot');
-        }
+    // mini-markdown per codice ed elenchi
+    function renderMarkdown(t){
+      if(!t) return '';
+      // code block ```
+      t = t.replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${escapeHtml(code)}</code></pre><span class="copy" data-copy="${encodeURIComponent(code)}">Copia</span>`);
+      // inline code
+      t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+      // newlines
+      t = t.replace(/\n/g, '<br>');
+      return t;
+    }
+    function escapeHtml(s){ return s.replace(/[&<>"]+/g, (c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
 
-        userInput.disabled = false;
-        sendButton.disabled = false;
-        userInput.focus();
+    function enhanceCodeBlocks(scope){
+      scope.querySelectorAll('.copy').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const txt = decodeURIComponent(btn.getAttribute('data-copy')||'');
+          navigator.clipboard.writeText(txt);
+          toast('Copiato');
+        });
+      });
+    }
+
+    function pushToHistory(id){
+      const chats = JSON.parse(localStorage.getItem(CHATLOG_KEY) || '[]');
+      if (!chats.find(c => c.threadId === id)){
+        chats.unshift({ threadId: id, ts: Date.now() });
+        localStorage.setItem(CHATLOG_KEY, JSON.stringify(chats.slice(0,20)));
       }
+      renderHistory();
+    }
+
+    function renderHistory(){
+      const chats = JSON.parse(localStorage.getItem(CHATLOG_KEY) || '[]');
+      historyEl.innerHTML = '';
+      chats.forEach(c => {
+        const b = document.createElement('button');
+        b.textContent = new Date(c.ts).toLocaleString() + ' • ' + shortId(c.threadId);
+        if (c.threadId === threadId) b.classList.add('active');
+        b.onclick = () => {
+          threadId = c.threadId;
+          localStorage.setItem(THREAD_KEY, threadId);
+          threadShort.textContent = shortId(threadId);
+          messagesEl.innerHTML = '';
+          addBubble('Nuovo contesto caricato. Continua pure.', 'bot');
+          renderHistory();
+        };
+        historyEl.appendChild(b);
+      });
+    }
+
+    el('newChat').onclick = async () => {
+      const r = await api({ action: 'reset' });
+      if (r?.threadId){
+        threadId = r.threadId;
+        localStorage.setItem(THREAD_KEY, threadId);
+        messagesEl.innerHTML = '';
+        addWelcome();
+        pushToHistory(threadId);
+        threadShort.textContent = shortId(threadId);
+      }
+    };
+
+    el('clearAll').onclick = () => {
+      localStorage.removeItem(CHATLOG_KEY);
+      renderHistory();
+      toast('Cronologia locale pulita');
+    };
+
+    el('exportBtn').onclick = () => {
+      const data = {
+        threadId,
+        settings,
+        html: document.documentElement.outerHTML.slice(0, 200) + '…',
+        exportedAt: new Date().toISOString()
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `manuel-chat-export-${Date.now()}.json`;
+      a.click();
+    };
+
+    el('helpLink').onclick = (e) => {
+      e.preventDefault();
+      addBubble('Suggerimenti: usa "Impostazioni" per override istruzioni; "Nuova" per resettare il thread senza toccare l\'Assistant.', 'bot');
+    };
+
+    // Invio messaggio
+    async function onSend(){
+      const text = inputEl.value.trim();
+      if (!text) return;
+      addBubble(text, 'user');
+      inputEl.value = '';
+      inputEl.disabled = true; sendBtn.disabled = true;
+
+      const thinking = addThinking();
+      setStatus('In corso…', '#ffd36a');
+
+      try{
+        const r = await api({ action: 'message', message: text, threadId, extraInstructions: settings.extraInstructions || undefined });
+        thinking.remove();
+        if (r?.ok){
+          if (!threadId && r.threadId){ threadId = r.threadId; localStorage.setItem(THREAD_KEY, threadId); pushToHistory(threadId); }
+          threadShort.textContent = shortId(threadId);
+          addBubble(r.reply || '(vuoto)', 'bot');
+          setStatus('Pronto', '#67e5a1');
+        } else {
+          addBubble('Errore: ' + (r?.error || 'sconosciuto'), 'bot');
+          setStatus('Errore', '#ff7b7b');
+        }
+      }catch(err){
+        thinking.remove();
+        addBubble('Errore di connessione. Riprova.', 'bot');
+        setStatus('Offline?', '#ff7b7b');
+      } finally {
+        inputEl.disabled = false; sendBtn.disabled = false; inputEl.focus();
+      }
+    }
+
+    sendBtn.onclick = onSend;
+    inputEl.addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); onSend(); }
     });
 
-    userInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') sendButton.click();
-    });
+    function setStatus(text, color){ statusText.textContent = text; statusDot.style.background = color; }
+
+    async function api(payload){
+      const res = await fetch('/.netlify/functions/gptHandler', {
+        method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload)
+      });
+      return res.json();
+    }
+
+    function addWelcome(){ addBubble(settings.welcomeText, 'bot'); }
+
+    // Boot
+    (async function init(){
+      renderHistory();
+      if (!threadId){
+        const r = await api({ action: 'init' });
+        threadId = r?.threadId || null;
+        if (threadId) localStorage.setItem(THREAD_KEY, threadId);
+      }
+      threadShort.textContent = shortId(threadId);
+      addWelcome();
+    })();
   </script>
 </body>
 </html>
