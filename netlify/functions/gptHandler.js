@@ -1,129 +1,135 @@
+// netlify/functions/gptHandler.js
+// Migliorato: thread persistenti, override istruzioni per-run, polling robusto, errori chiari
+// Niente riassunto bloccante: più veloce e stabile su Netlify Free
+
 import { OpenAI } from "openai";
 
-// Memoria globale (volatile, non persistente su Netlify Production)
-let summaryMemory = "L'utente che chiede di Manuel è \"Non specificato\". Le domande fatte sono: . Le risposte sono: .";
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const ASSISTANT_ID = process.env.OPENAI_ASSISTANT_ID;
 
-// Funzione per aggiornare il riassunto in modo compatto secondo formato richiesto
-async function aggiornaRiassuntoConGPT3({ oldSummary, userMessage, aiResponse }) {
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        {
-          role: "system",
-          content: `
-Il tuo compito è AGGIORNARE un breve riassunto della conversazione secondo questo formato fisso:
+/**
+ * Utility: attende ms
+ */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-L'utente che chiede di Manuel è "[NOME REPARTO, RUOLO, AZIENDA, ecc.]" (anche dedotto dal contesto, oppure scrivi "Non specificato" se non emerge).
-Le domande fatte sono: [elenco sintetico delle domande finora, senza duplicati].
-Le risposte sono: [elenco sintetico delle risposte date dall’AI, senza duplicati, una frase per risposta].
+/**
+ * Poll run status entro un budget di tempo (≈ 9s, compatibile con Netlify Free)
+ */
+async function waitForRunCompletion(threadId, runId, maxAttempts = 30, delayMs = 300) {
+  let attempts = 0;
+  while (attempts < maxAttempts) {
+    const run = await openai.beta.threads.runs.retrieve(threadId, runId);
 
-IMPORTANTE:
-- Aggiorna la lista aggiungendo solo le nuove domande o risposte (evita duplicati).
-- NON ripetere cose già incluse.
-- Sintetizza ogni domanda/risposta in poche parole.
-- Mantieni SEMPRE il formato sopra, breve e chiaro.
+    if (run.status === "completed") return run;
+    if (run.status === "requires_action") {
+      // Non gestiamo tool-calls in questo flow minimal: termina con messaggio chiaro
+      throw new Error("L'assistente richiede un'azione (tool). Disabilita tool o aggiorna il flow.");
+    }
+    if (["failed", "cancelled", "expired"].includes(run.status)) {
+      throw new Error(`Run terminata con stato: ${run.status}`);
+    }
 
-Esempio:
-L'utente che chiede di Manuel è "HR".
-Le domande fatte sono: "Che competenze ha?", "Che progetti segue?"
-Le risposte sono: "Manuel lavora su progetti di AI.", "Le sue competenze includono Python e prompt engineering."
-`
-        },
-        {
-          role: "user",
-          content: `
-RIASSUNTO ATTUALE:
-${oldSummary}
-
-NUOVA DOMANDA UTENTE:
-${userMessage}
-
-NUOVA RISPOSTA AI:
-${aiResponse}
-
-Aggiorna solo se emergono nuove informazioni.`
-        }
-      ],
-      temperature: 0.1,
-      max_tokens: 300,
-    });
-    return completion.choices[0].message.content.trim();
-  } catch (err) {
-    console.error("Errore aggiornaRiassuntoConGPT3:", err);
-    return oldSummary;
+    await sleep(delayMs);
+    attempts++;
   }
+  throw new Error("Timeout risposta AI (limite Netlify). Prova di nuovo.");
+}
+
+/**
+ * Estrae l'ultimo messaggio dell'assistente in modo affidabile
+ */
+async function getLastAssistantMessage(threadId) {
+  const list = await openai.beta.threads.messages.list(threadId, { order: "desc", limit: 10 });
+  const msg = list.data.find((m) => m.role === "assistant");
+  if (!msg) return null;
+
+  // Supporto contenuti misti; qui estraiamo solo testo
+  const part = msg.content.find((c) => c.type === "text");
+  return part?.text?.value ?? null;
 }
 
 export async function handler(event) {
+  if (!process.env.OPENAI_API_KEY || !ASSISTANT_ID) {
+    return {
+      statusCode: 500,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ error: "Variabili ambiente mancanti: OPENAI_API_KEY/OPENAI_ASSISTANT_ID" }),
+    };
+  }
+
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
   }
-  if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_ASSISTANT_ID) {
-    return { statusCode: 500, body: "Manca una variabile di ambiente." };
-  }
+
   try {
-    const body = JSON.parse(event.body);
-    const userMessage = body.message;
+    const { action = "message", message, threadId, extraInstructions } = JSON.parse(event.body || "{}");
 
-    // 1. Crea una nuova thread Assistant (per la risposta AI)
-    const thread = await openai.beta.threads.create();
+    if (action === "init") {
+      const thread = await openai.beta.threads.create({
+        // Puoi salvare contesto iniziale direttamente nel thread via metadata
+        // metadata: { app: "manuel-chat", version: "v2" }
+      });
+      return {
+        statusCode: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ok: true, threadId: thread.id }),
+      };
+    }
 
-    // 2. Invia il riassunto come messaggio di contesto
-    await openai.beta.threads.messages.create(thread.id, {
-      role: "user",
-      content: `[CONTESTO RIASSUNTO]: ${summaryMemory}`,
-    });
+    if (action === "reset") {
+      const thread = await openai.beta.threads.create();
+      return {
+        statusCode: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ok: true, threadId: thread.id }),
+      };
+    }
 
-    // 3. Invia il vero messaggio dell'utente
-    await openai.beta.threads.messages.create(thread.id, {
-      role: "user",
-      content: userMessage,
-    });
+    if (action === "message") {
+      if (!message || typeof message !== "string") {
+        return { statusCode: 400, body: JSON.stringify({ error: "Parametro 'message' mancante" }) };
+      }
 
-    // 4. Run assistant
-    const run = await openai.beta.threads.runs.create(thread.id, {
-      assistant_id: process.env.OPENAI_ASSISTANT_ID,
-    });
+      // Se non c'è un thread, creane uno al volo
+      let _threadId = threadId;
+      if (!_threadId) {
+        const thread = await openai.beta.threads.create();
+        _threadId = thread.id;
+      }
 
-    // 5. Polling più rapido (fino a 5 secondi circa)
-    let completedRun;
-    let attempts = 0;
-    const maxAttempts = 16; // 16 x 300ms ≈ 5s
+      // Aggiungi messaggio utente al thread
+      await openai.beta.threads.messages.create(_threadId, {
+        role: "user",
+        content: message,
+      });
 
-    do {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      completedRun = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-      attempts++;
-      if (attempts > maxAttempts) throw new Error("Timeout risposta AI.");
-    } while (completedRun.status !== "completed");
+      // Avvia run con assistant scelto; opzionale override istruzioni per-run
+      const run = await openai.beta.threads.runs.create(_threadId, {
+        assistant_id: ASSISTANT_ID,
+        ...(extraInstructions ? { instructions: extraInstructions } : {}),
+      });
 
-    // 6. Ottieni risposta AI
-    const messages = await openai.beta.threads.messages.list(thread.id);
-    const assistantMsg = messages.data.reverse().find(m => m.role === "assistant");
-    const aiResponse = assistantMsg?.content?.[0]?.text?.value || "Risposta non trovata.";
+      // Poll entro 9s
+      await waitForRunCompletion(_threadId, run.id);
 
-    // 7. Aggiorna riassunto (reparto + domande + risposte)
-    summaryMemory = await aggiornaRiassuntoConGPT3({
-      oldSummary: summaryMemory,
-      userMessage,
-      aiResponse,
-    });
+      // Recupera ultima risposta
+      const text = await getLastAssistantMessage(_threadId);
 
-    // 8. Rispondi all'utente
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ reply: aiResponse }),
-    };
+      return {
+        statusCode: 200,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ok: true, threadId: _threadId, reply: text ?? "(nessun testo)" }),
+      };
+    }
+
+    return { statusCode: 400, body: JSON.stringify({ error: `Azione non supportata: ${action}` }) };
   } catch (err) {
     console.error("SERVER ERROR:", err);
     return {
-      statusCode: 200,
-      body: JSON.stringify({ reply: "Sto riscontrando rallentamenti temporanei: riprova tra qualche secondo, per favore." }),
+      statusCode: 200, // evitiamo 5xx per non mostrare pagina Netlify error
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ok: false, error: String(err?.message || err) }),
     };
   }
 }
