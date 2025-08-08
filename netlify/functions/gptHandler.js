@@ -1,13 +1,11 @@
 import { OpenAI } from "openai";
 
-// Memoria globale (volatile, non persistente su Netlify Production)
+// Memoria globale (volatile: NON persiste tra invocazioni su Netlify)
 let summaryMemory = "L'utente che chiede di Manuel è \"Non specificato\". Le domande fatte sono: . Le risposte sono: .";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Aggiorna mini-riassunto conversazione (formato fisso)
+// Aggiorna mini-riassunto in formato fisso
 async function aggiornaRiassuntoConGPT3({ oldSummary, userMessage, aiResponse }) {
   try {
     const completion = await openai.chat.completions.create({
@@ -15,9 +13,7 @@ async function aggiornaRiassuntoConGPT3({ oldSummary, userMessage, aiResponse })
       temperature: 0.1,
       max_tokens: 300,
       messages: [
-        {
-          role: "system",
-          content: `
+        { role: "system", content: `
 Il tuo compito è AGGIORNARE un breve riassunto della conversazione secondo questo formato fisso:
 
 L'utente che chiede di Manuel è "[NOME REPARTO, RUOLO, AZIENDA, ecc.]" (anche dedotto dal contesto, oppure scrivi "Non specificato" se non emerge).
@@ -27,11 +23,8 @@ Le risposte sono: [elenco sintetico delle risposte date dall’AI, senza duplica
 IMPORTANTE:
 - Aggiungi solo nuove voci, niente duplicati.
 - Tono sintetico.
-`
-        },
-        {
-          role: "user",
-          content: `
+`},
+        { role: "user", content: `
 RIASSUNTO ATTUALE:
 ${oldSummary}
 
@@ -41,8 +34,7 @@ ${userMessage}
 NUOVA RISPOSTA AI:
 ${aiResponse}
 
-Aggiorna solo se emergono nuove informazioni.`
-        }
+Aggiorna solo se emergono nuove informazioni.`}
       ],
     });
     return completion.choices[0].message.content.trim();
@@ -87,7 +79,7 @@ export async function handler(event) {
       assistant_id: process.env.OPENAI_ASSISTANT_ID,
     });
 
-    // 5) Polling (≈6s)
+    // 5) Polling semplice (≈6s max)
     let completedRun;
     let attempts = 0;
     const maxAttempts = 20; // 20 x 300ms ≈ 6s
@@ -95,19 +87,18 @@ export async function handler(event) {
       await new Promise((r) => setTimeout(r, 300));
       completedRun = await openai.beta.threads.runs.retrieve(thread.id, run.id);
       if (++attempts > maxAttempts) throw new Error("Timeout risposta AI.");
+      if (["failed","cancelled","expired"].includes(completedRun.status)) {
+        throw new Error(`Run ${completedRun.status}`);
+      }
     } while (completedRun.status !== "completed");
 
     // 6) Leggi risposta AI
-    const messages = await openai.beta.threads.messages.list(thread.id);
-    const assistantMsg = messages.data.reverse().find(m => m.role === "assistant");
+    const msgs = await openai.beta.threads.messages.list(thread.id);
+    const assistantMsg = msgs.data.reverse().find(m => m.role === "assistant");
     const aiResponse = assistantMsg?.content?.[0]?.text?.value || "Risposta non trovata.";
 
     // 7) Aggiorna mini-memoria
-    summaryMemory = await aggiornaRiassuntoConGPT3({
-      oldSummary: summaryMemory,
-      userMessage,
-      aiResponse,
-    });
+    summaryMemory = await aggiornaRiassuntoConGPT3({ oldSummary: summaryMemory, userMessage, aiResponse });
 
     // 8) Risposta
     return {
