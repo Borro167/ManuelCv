@@ -1,11 +1,11 @@
 import { OpenAI } from "openai";
 
-// Memoria globale (volatile: NON persiste tra invocazioni su Netlify)
+// Volatile (non persiste tra invocazioni)
 let summaryMemory = "L'utente che chiede di Manuel è \"Non specificato\". Le domande fatte sono: . Le risposte sono: .";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Aggiorna mini-riassunto in formato fisso
+// Mini-riassunto conversazione
 async function aggiornaRiassuntoConGPT3({ oldSummary, userMessage, aiResponse }) {
   try {
     const completion = await openai.chat.completions.create({
@@ -38,8 +38,7 @@ Aggiorna solo se emergono nuove informazioni.`}
       ],
     });
     return completion.choices[0].message.content.trim();
-  } catch (err) {
-    console.error("Errore aggiornaRiassuntoConGPT3:", err);
+  } catch {
     return oldSummary;
   }
 }
@@ -79,7 +78,7 @@ export async function handler(event) {
       assistant_id: process.env.OPENAI_ASSISTANT_ID,
     });
 
-    // 5) Polling semplice (≈6s max)
+    // 5) Polling semplice (≈6s)
     let completedRun;
     let attempts = 0;
     const maxAttempts = 20; // 20 x 300ms ≈ 6s
