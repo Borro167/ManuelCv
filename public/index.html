@@ -246,4 +246,135 @@
         const res = await fetch(FN_URL, {
           method:"POST",
           headers:{ "Content-Type":"application/json" },
-          body: JSON
+          body: JSON.stringify({ message: text }),
+          signal: controller.signal
+        });
+        if(!res.ok){
+          thinking.remove();
+          addRow("bot", `Errore server (${res.status}). Riprova tra poco.`);
+          return;
+        }
+        const data = await res.json();
+        thinking.remove();
+        const reply = (data && data.reply) ? String(data.reply) : "Nessuna risposta.";
+        addRow("bot", reply);
+        saveToHistory("bot", reply);
+      }catch(err){
+        thinking.remove();
+        addRow("bot", err.name === "AbortError" ? "Risposta interrotta." : "Errore di connessione. Riprova più tardi.");
+      }finally{
+        box.disabled = false; send.disabled = false; statusEl.textContent = "Pronto"; box.focus();
+        stopBtn.style.display = "none";
+        controller = null;
+      }
+    }
+    stopBtn.addEventListener("click", ()=> controller?.abort());
+
+    // ---------- UX ----------
+    box.addEventListener("input", ()=>{
+      box.style.height = "44px";
+      box.style.height = Math.min(box.scrollHeight, 160) + "px";
+    });
+    box.addEventListener("keydown", (e)=>{
+      if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); sendMessage(); }
+    });
+    send.addEventListener("click", sendMessage);
+    newChat.addEventListener("click", ()=>{ clearHistory(); showToast("Nuova chat"); });
+    exportTxt.addEventListener("click", ()=>{
+      const arr = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+      const lines = arr.map(x => `[${x.role.toUpperCase()}] ${new Date(x.t || Date.now()).toLocaleString()}\n${x.text}\n`);
+      const blob = new Blob([lines.join("\n")], {type:"text/plain"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "chat-manuel.txt";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    // ---------- Drag & Drop MP3 (cambia musica al volo) ----------
+    ["dragenter","dragover"].forEach(ev => window.addEventListener(ev, e=>{
+      if([...e.dataTransfer?.items || []].some(i => i.type.startsWith("audio/"))){
+        e.preventDefault(); document.querySelector("#drop").classList.add("active");
+      }
+    }));
+    ["dragleave","drop"].forEach(ev => window.addEventListener(ev, e=>{
+      e.preventDefault(); document.querySelector("#drop").classList.remove("active");
+    }));
+    window.addEventListener("drop", e=>{
+      const file = [...e.dataTransfer.files].find(f => f.type.startsWith("audio/"));
+      if(!file) return;
+      const url = URL.createObjectURL(file);
+      swapMusic(url);
+      showToast("Musica aggiornata");
+    });
+
+    // ---------- Musica di sottofondo (autoplay + fallback) ----------
+    let desiredVolume = Number(localStorage.getItem("bgm_volume") || 0.25);
+    desiredVolume = Math.max(0, Math.min(1, desiredVolume));
+
+    function fadeTo(target=desiredVolume, ms=1500){
+      const start = bgm.volume;
+      const t0 = performance.now();
+      function step(t){
+        const k = Math.min(1, (t - t0)/ms);
+        bgm.volume = start + (target - start)*k;
+        if(k < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+
+    async function tryPlayAutoplay(){
+      try{
+        bgm.volume = 0.0001; // quasi muto, migliora chance di autoplay
+        bgm.muted = false;
+        const p = bgm.play();
+        if(p && p.then){ await p; }
+        setTimeout(()=> fadeTo(desiredVolume, 1600), 200);
+      }catch{
+        // Autoplay bloccato → parte alla prima interazione
+        const unlock = ()=>{
+          bgm.play().then(()=> fadeTo(desiredVolume, 1600)).catch(()=>{});
+          window.removeEventListener("pointerdown", unlock);
+          window.removeEventListener("keydown", unlock);
+        };
+        window.addEventListener("pointerdown", unlock, { once:true });
+        window.addEventListener("keydown", unlock, { once:true });
+      }
+    }
+
+    function swapMusic(src){
+      const wasPlaying = !bgm.paused;
+      bgm.pause();
+      bgm.src = src;
+      bgm.load();
+      if(wasPlaying){ tryPlayAutoplay(); }
+    }
+
+    // Scorciatoie: M per muto, + / - per volume
+    window.addEventListener("keydown", (e)=>{
+      if(e.key.toLowerCase() === "m"){
+        bgm.muted = !bgm.muted;
+        showToast(bgm.muted ? "Musica in muto (M per riattivare)" : "Musica attiva");
+      }
+      if(e.key === "+" || e.key === "="){
+        desiredVolume = Math.min(1, desiredVolume + 0.05); localStorage.setItem("bgm_volume", desiredVolume);
+        if(!bgm.muted){ bgm.volume = desiredVolume; }
+        showToast("Volume: " + Math.round(desiredVolume*100) + "%");
+      }
+      if(e.key === "-"){
+        desiredVolume = Math.max(0, desiredVolume - 0.05); localStorage.setItem("bgm_volume", desiredVolume);
+        if(!bgm.muted){ bgm.volume = desiredVolume; }
+        showToast("Volume: " + Math.round(desiredVolume*100) + "%");
+      }
+    });
+
+    // Init
+    loadHistory();
+    document.addEventListener("visibilitychange", ()=>{
+      if(!document.hidden && bgm.paused){ tryPlayAutoplay(); }
+    });
+    tryPlayAutoplay();
+    box.focus();
+  </script>
+</body>
+</html>
