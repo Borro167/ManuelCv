@@ -1,95 +1,116 @@
-// netlify/functions/chatDirect.js
-// Chiamata diretta Chat Completions: ogni richiesta usa estratti dal CV e dalla Storyline
-
+// netlify/functions/gptHandler.js
 import { OpenAI } from "openai";
-import fs from "fs/promises";
-import path from "path";
-import pdfParse from "pdf-parse";
+
+// ⚠️ Volatile: su Netlify non è garantito tra invocazioni
+let summaryMemory = `L'utente che chiede di Manuel è "Non specificato". Le domande fatte sono: . Le risposte sono: .`;
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-let corpusCache = null;
+async function aggiornaRiassuntoConGPT3({ oldSummary, userMessage, aiResponse }) {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      temperature: 0.1,
+      max_tokens: 300,
+      messages: [
+        { role: "system", content: `
+Il tuo compito è AGGIORNARE un breve riassunto della conversazione secondo questo formato fisso:
 
-async function loadCorpus(){
-  if (corpusCache) return corpusCache;
-  const base = path.dirname(new URL(import.meta.url).pathname);
-  const root = path.resolve(base, "../../");
-  const storyPath = path.join(root, "storyline_manuel.txt");
-  const cvPath = path.join(root, "cv_MFE.pdf");
+L'utente che chiede di Manuel è "[NOME REPARTO, RUOLO, AZIENDA, ecc.]" (anche dedotto dal contesto, oppure scrivi "Non specificato" se non emerge).
+Le domande fatte sono: [elenco sintetico delle domande finora, senza duplicati].
+Le risposte sono: [elenco sintetico delle risposte date dall’AI, senza duplicati, una frase per risposta].
 
-  const [storyText, cvBuf] = await Promise.all([
-    fs.readFile(storyPath, "utf8").catch(()=>""),
-    fs.readFile(cvPath).catch(()=>null)
-  ]);
+IMPORTANTE:
+- Aggiungi solo nuove voci, niente duplicati.
+- Tono sintetico.
+` },
+        { role: "user", content: `
+RIASSUNTO ATTUALE:
+${oldSummary}
 
-  let cvText = "";
-  if (cvBuf){
-    try{ const parsed = await pdfParse(cvBuf); cvText = parsed.text || ""; }catch(e){ cvText = ""; }
+NUOVA DOMANDA UTENTE:
+${userMessage}
+
+NUOVA RISPOSTA AI:
+${aiResponse}
+
+Aggiorna solo se emergono nuove informazioni.` }
+      ],
+    });
+    return completion.choices[0].message.content.trim();
+  } catch {
+    return oldSummary;
+  }
+}
+
+export const handler = async (event) => {
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, body: "Method Not Allowed" };
   }
 
-  corpusCache = { storyText, cvText };
-  return corpusCache;
-}
+  if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_ASSISTANT_ID) {
+    return { statusCode: 500, body: "Manca una variabile di ambiente." };
+  }
 
-function chunk(text, size = 1200, overlap = 120){
-  if (!text) return [];
-  const out = []; let i = 0; const n = text.length;
-  while (i < n){ out.push(text.slice(i, i + size)); i += Math.max(1, size - overlap); }
-  return out;
-}
+  try {
+    const { message: userMessage } = JSON.parse(event.body || "{}");
+    if (!userMessage || typeof userMessage !== "string") {
+      return { statusCode: 400, body: "Richiesta non valida." };
+    }
 
-function pickRelevant(query, chunks, topK = 6){
-  const q = (query || "").toLowerCase().split(/[^a-zà-ù0-9]+/i).filter(Boolean);
-  const score = (c) => {
-    const lc = c.toLowerCase();
-    let s = 0; for (const t of q){ if (!t) continue; const hits = lc.split(t).length - 1; s += hits * (t.length > 3 ? 2 : 1); }
-    return s;
-  };
-  const scored = chunks.map(c => ({ c, s: score(c) }));
-  scored.sort((a,b)=>b.s-a.s);
-  return scored.slice(0, Math.min(topK, scored.length)).map(o=>o.c);
-}
+    // 1) Thread nuovo (se vuoi persistenza, salva thread.id in KV/DB)
+    const thread = await openai.beta.threads.create();
 
-export async function handler(event){
-  if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method Not Allowed" };
-  try{
-    const { message, behavior = "", history = [] } = JSON.parse(event.body || "{}");
-    if (!message) return { statusCode: 400, body: JSON.stringify({ ok:false, error:"Parametro 'message' mancante" }) };
-
-    const { storyText, cvText } = await loadCorpus();
-    const allChunks = [ ...chunk(storyText), ...chunk(cvText) ];
-    const q = [ ...history.filter(h=>h.role==='user').slice(-2).map(h=>h.text), message ].join(" \n ");
-    const ctx = pickRelevant(q, allChunks, 6);
-
-    const system = [
-      "Sei l'assistente privato di Manuel. Regole:",
-      "- Rispondi in italiano, conciso e diretto.",
-      "- Quando la domanda riguarda profilo/cv/esperienze/skill, usa SOLO le informazioni nei CONTENUTI allegati.",
-      "- Se l'informazione non è nei documenti, dillo chiaramente.",
-      "- Niente opinioni o inferenze personali.",
-      behavior ? `- Comportamento extra: ${behavior}` : null
-    ].filter(Boolean).join("\n");
-
-    const contentBlock = ctx.length ? `=== CONTENUTI (estratti) ===\n${ctx.join("\n---\n")}\n=== FINE CONTENUTI ===` : "";
-
-    const messages = [
-      { role: "system", content: system },
-      contentBlock ? { role: "system", content: contentBlock } : null,
-      ...history.map(h => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: h.text })),
-      { role: "user", content: message }
-    ].filter(Boolean);
-
-    const completion = await openai.chat.completions.create({
-      model: MODEL,
-      messages,
-      temperature: 0.2,
+    // 2) Contesto sintetico
+    await openai.beta.threads.messages.create(thread.id, {
+      role: "user",
+      content: `[CONTESTO RIASSUNTO]: ${summaryMemory}`,
     });
 
-    const reply = completion.choices?.[0]?.message?.content || "";
-    return { statusCode: 200, headers:{"content-type":"application/json"}, body: JSON.stringify({ ok:true, reply }) };
-  }catch(err){
-    console.error("DIRECT ERROR:", err);
-    return { statusCode: 200, headers:{"content-type":"application/json"}, body: JSON.stringify({ ok:false, error: String(err?.message || err) }) };
+    // 3) Messaggio utente
+    await openai.beta.threads.messages.create(thread.id, {
+      role: "user",
+      content: userMessage,
+    });
+
+    // 4) Run
+    const run = await openai.beta.threads.runs.create(thread.id, {
+      assistant_id: process.env.OPENAI_ASSISTANT_ID,
+    });
+
+    // 5) Polling (fino ~12s)
+    let completedRun;
+    let attempts = 0;
+    const maxAttempts = 40; // 40 x 300ms ≈ 12s
+    do {
+      await new Promise(r => setTimeout(r, 300));
+      completedRun = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      if (++attempts > maxAttempts) throw new Error("Timeout risposta AI.");
+    } while (completedRun.status !== "completed");
+
+    // 6) Messaggi
+    const msgs = await openai.beta.threads.messages.list(thread.id);
+    const assistantMsg = msgs.data.reverse().find(m => m.role === "assistant");
+    const aiResponse = assistantMsg?.content?.[0]?.text?.value || "Risposta non trovata.";
+
+    // 7) Aggiorna mini-memoria
+    summaryMemory = await aggiornaRiassuntoConGPT3({
+      oldSummary: summaryMemory,
+      userMessage,
+      aiResponse,
+    });
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ reply: aiResponse }),
+      headers: { "Content-Type": "application/json" },
+    };
+  } catch (err) {
+    console.error("SERVER ERROR:", err);
+    return {
+      statusCode: 502,
+      body: JSON.stringify({ reply: "Sto riscontrando rallentamenti temporanei: riprova tra qualche secondo, per favore." }),
+      headers: { "Content-Type": "application/json" },
+    };
   }
-}
+};
