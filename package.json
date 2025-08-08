@@ -1,9 +1,10 @@
 {
-  "name": "manuel-chat-ui-v2",
-  "version": "1.1.0",
+  "name": "manuel-chat-ui-v3",
+  "version": "1.2.0",
   "type": "module",
   "dependencies": {
-    "openai": "^4.26.0"
+    "openai": "^4.26.0",
+    "pdf-parse": "^1.1.1"
   },
   "engines": { "node": ">=18" }
 }
