@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
   <title>Manuel • Chat AI</title>
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="Chat AI ultra-veloce con musica di sottofondo in autoplay, animazioni, export e salvataggio locale.">
+  <meta name="description" content="Chat AI con musica di sottofondo in autoplay, animazioni, export e cronologia locale.">
   <style>
     :root{
       --bg: #0c0f14;
@@ -16,9 +16,6 @@
       --muted:#9aa4b2;
       --accent:#6ea8fe;
       --accent-2:#a78bfa;
-      --success:#22c55e;
-      --danger:#ef4444;
-      --radius: 16px;
     }
     @media (prefers-color-scheme: light){
       :root{
@@ -35,8 +32,8 @@
         var(--bg);
       color:var(--text);
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
-      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
       display:flex; align-items:center; justify-content:center; padding:14px;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
     }
     .app{
       width:100%; max-width:960px; height:min(92vh, 980px);
@@ -53,21 +50,20 @@
       background:linear-gradient(180deg, color-mix(in oklab, var(--panel) 96%, transparent), var(--panel));
     }
     .brand{ display:flex; gap:10px; align-items:center; font-weight:700 }
-    .pulse{ width:10px; height:10px; border-radius:999px; background:var(--accent); box-shadow:0 0 14px var(--accent); }
-    .actions{ display:flex; gap:8px; align-items:center; }
+    .pulse{ width:10px; height:10px; border-radius:999px; background:var(--accent); box-shadow:0 0 14px var(--accent) }
+    .actions{ display:flex; gap:8px; align-items:center }
     .iconbtn{
       display:inline-flex; align-items:center; justify-content:center; gap:8px;
       padding:10px 12px; border-radius:12px; border:1px solid var(--line); cursor:pointer;
       background:linear-gradient(180deg, color-mix(in oklab, var(--panel) 96%, transparent), var(--panel));
       color:var(--text); font-weight:600;
     }
-    .iconbtn[disabled]{ opacity:.6; cursor:not-allowed }
     .messages{
       overflow:auto; padding:10px; display:flex; flex-direction:column; gap:12px;
       scroll-behavior:smooth; background: color-mix(in oklab, var(--panel-2) 100%, transparent);
       border:1px solid var(--line); border-radius:14px;
     }
-    .row{ display:flex; gap:8px; align-items:flex-end; }
+    .row{ display:flex; gap:8px; align-items:flex-end }
     .avatar{
       width:34px; height:34px; border-radius:999px; flex:none;
       background: radial-gradient(circle at 30% 30%, var(--accent), var(--accent-2));
@@ -76,22 +72,18 @@
     .bubble{
       max-width:78%; padding:12px 14px; border-radius:16px; line-height:1.5;
       background:linear-gradient(180deg, color-mix(in oklab, var(--panel) 94%, transparent), var(--panel));
-      border:1px solid var(--line); position:relative; white-space:pre-wrap; word-break:break-word;
+      border:1px solid var(--line); white-space:pre-wrap; word-break:break-word;
     }
     .me .bubble{ background:linear-gradient(180deg, color-mix(in oklab, var(--accent) 24%, var(--panel)), var(--panel)); border-bottom-right-radius:6px }
     .bot .bubble{ border-bottom-left-radius:6px }
     .sys{ align-self:center; color:var(--muted); font-size:.95rem; padding:8px 10px; border:1px dashed var(--line); border-radius:12px }
-    .meta{
-      display:flex; gap:10px; align-items:center; color:var(--muted); font-size:.8rem; margin-top:4px;
-    }
-    .copy{
-      border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:.85rem; padding:2px 6px; border-radius:8px;
-    }
+    .meta{ display:flex; gap:10px; align-items:center; color:var(--muted); font-size:.8rem; margin-top:4px }
+    .copy{ border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:.85rem; padding:2px 6px; border-radius:8px }
     .copy:hover{ color:var(--text); background: color-mix(in oklab, var(--panel) 90%, transparent) }
-    .thinking{ display:inline-flex; gap:4px; align-items:center; color:var(--muted); }
+    .thinking{ display:inline-flex; gap:4px; align-items:center; color:var(--muted) }
     .thinking i{ width:6px; height:6px; border-radius:999px; background:currentColor; opacity:.4; animation:b 1.2s infinite }
     .thinking i:nth-child(2){animation-delay:.15s} .thinking i:nth-child(3){animation-delay:.30s}
-    @keyframes b{ 0%,80%,100%{transform:translateY(0);opacity:.35} 40%{transform:translateY(-4px);opacity:.85}}
+    @keyframes b{ 0%,80%,100%{transform:translateY(0);opacity:.35} 40%{transform:translateY(-4px);opacity:.85} }
     .input{
       display:flex; gap:10px; align-items:flex-end; padding:8px; border-radius:14px;
       background:linear-gradient(180deg, color-mix(in oklab, var(--panel) 96%, transparent), var(--panel));
@@ -170,7 +162,6 @@
       clearTimeout(showToast._t);
       showToast._t = setTimeout(()=> toast.style.display = "none", ms);
     }
-
     function fmtTime(d=new Date()){
       return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
     }
@@ -178,17 +169,14 @@
     function addRow(role, text){
       const row = document.createElement("div");
       row.className = "row " + (role === "user" ? "me" : "bot");
-
       const avatar = document.createElement("div");
       avatar.className = "avatar";
       row.appendChild(avatar);
-
       const wrap = document.createElement("div");
       const bubble = document.createElement("div");
       bubble.className = "bubble";
-      bubble.textContent = text; // ← niente innerHTML: l'HTML non interferisce
+      bubble.textContent = text; // ← NO innerHTML: l'AI non può iniettare HTML
       wrap.appendChild(bubble);
-
       const meta = document.createElement("div");
       meta.className = "meta";
       const time = document.createElement("span");
@@ -196,13 +184,10 @@
       const copy = document.createElement("button");
       copy.className = "copy";
       copy.textContent = "Copia";
-      copy.addEventListener("click", ()=>{
-        navigator.clipboard.writeText(text).then(()=> showToast("Copiato"));
-      });
+      copy.addEventListener("click", ()=> navigator.clipboard.writeText(text).then(()=> showToast("Copiato")));
       meta.appendChild(time);
       meta.appendChild(copy);
       wrap.appendChild(meta);
-
       row.appendChild(wrap);
       messages.appendChild(row);
       messages.scrollTop = messages.scrollHeight;
@@ -224,17 +209,17 @@
       return row;
     }
 
-    // ---------- Local storage for history ----------
+    // ---------- Cronologia (LocalStorage) ----------
     const HISTORY_KEY = "manuel_chat_history_v2";
     function loadHistory(){
       try{
-        const arr = JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]);
+        const arr = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
         arr.forEach(item => addRow(item.role, item.text));
       }catch{}
     }
     function saveToHistory(role, text){
       try{
-        const arr = JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]");
+        const arr = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
         arr.push({role, text, t: Date.now()});
         localStorage.setItem(HISTORY_KEY, JSON.stringify(arr.slice(-200)));
       }catch{}
@@ -244,7 +229,7 @@
       messages.innerHTML = '<div class="sys" id="welcome">Benvenuto! Questa è la chat di Manuel: risposte rapide, chiare e senza HTML attivo. Musica di sottofondo attiva automaticamente (se il browser lo consente).</div>';
     }
 
-    // ---------- Send message / Abort ----------
+    // ---------- Invio / Stop ----------
     let controller = null;
     async function sendMessage(){
       const text = box.value.trim();
@@ -252,7 +237,6 @@
       addRow("user", text);
       saveToHistory("user", text);
       box.value = ""; box.style.height = "44px";
-
       box.disabled = true; send.disabled = true; statusEl.textContent = "Invio in corso…";
       stopBtn.style.display = "inline-block";
 
@@ -262,139 +246,4 @@
         const res = await fetch(FN_URL, {
           method:"POST",
           headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({ message: text }),
-          signal: controller.signal
-        });
-        const data = await res.json();
-        thinking.remove();
-        const reply = (data && data.reply) ? String(data.reply) : "Nessuna risposta.";
-        addRow("bot", reply);
-        saveToHistory("bot", reply);
-      }catch(err){
-        thinking.remove();
-        if(err.name === "AbortError"){
-          addRow("bot", "Risposta interrotta.");
-        }else{
-          addRow("bot", "Errore di connessione. Riprova più tardi.");
-        }
-      }finally{
-        box.disabled = false; send.disabled = false; statusEl.textContent = "Pronto"; box.focus();
-        stopBtn.style.display = "none";
-        controller = null;
-      }
-    }
-    stopBtn.addEventListener("click", ()=> controller?.abort());
-
-    // ---------- Autoresize ----------
-    box.addEventListener("input", ()=>{
-      box.style.height = "44px";
-      box.style.height = Math.min(box.scrollHeight, 160) + "px";
-    });
-    box.addEventListener("keydown", (e)=>{
-      if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); sendMessage(); }
-    });
-    send.addEventListener("click", sendMessage);
-    newChat.addEventListener("click", ()=>{ clearHistory(); showToast("Nuova chat"); });
-    exportTxt.addEventListener("click", ()=>{
-      const arr = JSON.parse(localStorage.getItem(HISTORY_KEY)||"[]");
-      const lines = arr.map(x => {
-        const when = new Date(x.t || Date.now()).toLocaleString();
-        return `[${x.role.toUpperCase()}] ${when}\n${x.text}\n`;
-      });
-      const blob = new Blob([lines.join("\n")], {type:"text/plain"});
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "chat-manuel.txt";
-      a.click();
-      URL.revokeObjectURL(a.href);
-    });
-
-    // ---------- Drag & Drop MP3 (auto-swap, no button) ----------
-    ["dragenter","dragover"].forEach(ev => window.addEventListener(ev, e=>{
-      if([...e.dataTransfer?.items || []].some(i => i.type.startsWith("audio/"))){
-        e.preventDefault(); drop.classList.add("active");
-      }
-    }));
-    ["dragleave","drop"].forEach(ev => window.addEventListener(ev, e=>{
-      e.preventDefault(); drop.classList.remove("active");
-    }));
-    window.addEventListener("drop", e=>{
-      const file = [...e.dataTransfer.files].find(f => f.type.startsWith("audio/"));
-      if(!file) return;
-      const url = URL.createObjectURL(file);
-      swapMusic(url);
-      showToast("Musica aggiornata");
-    });
-
-    // ---------- Background music (autoplay) ----------
-    let desiredVolume = Number(localStorage.getItem("bgm_volume") || 0.25);
-    desiredVolume = Math.max(0, Math.min(1, desiredVolume));
-
-    function fadeTo(target=desiredVolume, ms=1500){
-      const start = bgm.volume;
-      const t0 = performance.now();
-      function step(t){
-        const k = Math.min(1, (t - t0)/ms);
-        bgm.volume = start + (target - start)*k;
-        if(k < 1) requestAnimationFrame(step);
-      }
-      requestAnimationFrame(step);
-    }
-
-    async function tryPlayAutoplay(){
-      try{
-        bgm.volume = 0.0001; // quasi muto, migliora le chance di autoplay
-        bgm.muted = false;
-        const p = bgm.play();
-        if(p && p.then){ await p; }
-        setTimeout(()=> fadeTo(desiredVolume, 1600), 200);
-      }catch(err){
-        // Autoplay bloccato → parte alla prima interazione
-        const unlock = ()=>{
-          bgm.play().then(()=> fadeTo(desiredVolume, 1600)).catch(()=>{});
-          window.removeEventListener("pointerdown", unlock);
-          window.removeEventListener("keydown", unlock);
-        };
-        window.addEventListener("pointerdown", unlock, { once:true });
-        window.addEventListener("keydown", unlock, { once:true });
-      }
-    }
-
-    function swapMusic(src){
-      const wasPlaying = !bgm.paused;
-      bgm.pause();
-      bgm.src = src;
-      bgm.load();
-      if(wasPlaying){
-        tryPlayAutoplay();
-      }
-    }
-
-    // Scorciatoie (senza UI): M per muto, + / - per volume
-    window.addEventListener("keydown", (e)=>{
-      if(e.key.toLowerCase() === "m"){
-        bgm.muted = !bgm.muted;
-        showToast(bgm.muted ? "Musica in muto (M per riattivare)" : "Musica attiva");
-      }
-      if(e.key === "+" || e.key === "="){
-        desiredVolume = Math.min(1, desiredVolume + 0.05); localStorage.setItem("bgm_volume", desiredVolume);
-        if(!bgm.muted){ bgm.volume = desiredVolume; }
-        showToast("Volume: " + Math.round(desiredVolume*100) + "%");
-      }
-      if(e.key === "-"){
-        desiredVolume = Math.max(0, desiredVolume - 0.05); localStorage.setItem("bgm_volume", desiredVolume);
-        if(!bgm.muted){ bgm.volume = desiredVolume; }
-        showToast("Volume: " + Math.round(desiredVolume*100) + "%");
-      }
-    });
-
-    // Init
-    loadHistory();
-    document.addEventListener("visibilitychange", ()=>{
-      if(!document.hidden && bgm.paused){ tryPlayAutoplay(); }
-    });
-    tryPlayAutoplay();
-    box.focus();
-  </script>
-</body>
-</html>
+          body: JSON
