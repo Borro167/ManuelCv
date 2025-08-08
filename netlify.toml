@@ -1,8 +1,7 @@
+[build]
+  publish = "public"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-  external_node_modules = ["openai", "pdf-parse"]
-  included_files = ["cv_MFE.pdf", "storyline_manuel.txt"]
-
-[build]
-  publish = "."
+  external_node_modules = ["openai"]
