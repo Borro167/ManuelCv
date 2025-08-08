@@ -3,101 +3,164 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-  <title>Manuel • Chat AI</title>
+  <title>Manuel • Chat AI (Math)</title>
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="Chat AI con musica di sottofondo in autoplay, animazioni, export e cronologia locale.">
+  <meta name="description" content="Chat AI a tema matematico con musica in autoplay, animazioni eleganti, export e cronologia locale.">
   <style>
+    /* ---------- THEME (Math aesthetic) ---------- */
     :root{
-      --bg: #0c0f14;
+      --bg: #0a0c10;
       --panel: #0f141b;
-      --panel-2: #121a22;
-      --line: #202a36;
-      --text: #e8eef5;
+      --panel-2: #101722;
+      --line: #1f2a37;
+      --text: #e9eef5;
       --muted:#9aa4b2;
-      --accent:#6ea8fe;
-      --accent-2:#a78bfa;
+      --accent:#71c7ec;      /* azzurro ciano */
+      --accent2:#a78bfa;     /* violetto */
+      --good:#22c55e;
+      --danger:#ef4444;
+      --r: 16px;
+      --shadow: 0 12px 40px rgba(0,0,0,.28);
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Inter, Roboto, Arial, sans-serif;
+      --math: "Cambria Math","STIX Two Math","DejaVu Math TeX Gyre","Latin Modern Math", "Times New Roman", serif;
     }
     @media (prefers-color-scheme: light){
       :root{
-        --bg:#f4f7fb; --panel:#ffffff; --panel-2:#f8fafc; --line:#e3e8ef;
-        --text:#0f172a; --muted:#596579; --accent:#2563eb; --accent-2:#7c3aed;
+        --bg:#f4f6fb; --panel:#ffffff; --panel-2:#f7f9fc; --line:#e3e8ef;
+        --text:#0f172a; --muted:#596579; --accent:#2563eb; --accent2:#7c3aed;
       }
     }
     *{ box-sizing: border-box }
     html,body{ height:100% }
     body{
-      margin:0; background:
-        radial-gradient(1200px 800px at 10% -10%, rgba(110,168,254,.18), transparent 40%),
-        radial-gradient(1000px 700px at 120% 10%, rgba(167,139,250,.16), transparent 40%),
-        var(--bg);
-      color:var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+      margin:0; color:var(--text); font-family: var(--font);
       display:flex; align-items:center; justify-content:center; padding:14px;
-      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      /* Fondo: griglia isometrica + gradienti */
+      background:
+        radial-gradient(1200px 800px at 15% -10%, color-mix(in oklab, var(--accent) 18%, transparent), transparent 40%),
+        radial-gradient(1000px 700px at 110% 0%, color-mix(in oklab, var(--accent2) 18%, transparent), transparent 40%),
+        repeating-linear-gradient( 0deg, color-mix(in oklab, var(--panel-2) 100%, transparent) 0 38px, transparent 38px 40px),
+        repeating-linear-gradient( 90deg, color-mix(in oklab, var(--panel-2) 100%, transparent) 0 38px, transparent 38px 40px),
+        var(--bg);
+      background-blend-mode: screen, screen, normal, normal, normal;
     }
+
+    /* leggero tappeto di simboli matematici sullo sfondo */
+    body::after{
+      content: "∑  ∫  π  ∇  √  e^{iπ}+1=0  lim_{x→0}  d/dt  ∂  ≥  ≈  ⟂  →  λ  μ  σ";
+      position: fixed; inset: 0; pointer-events: none; 
+      font-family: var(--math); font-size: clamp(28px, 3.6vw, 48px);
+      display: grid; place-items: center; opacity:.06;
+      letter-spacing: .25em;
+      color: var(--text);
+      mix-blend-mode: lighten;
+      transform: rotate(-12deg);
+    }
+
     .app{
-      width:100%; max-width:960px; height:min(92vh, 980px);
+      width:100%; max-width:980px; height:min(92vh, 980px);
       display:grid; grid-template-rows: auto 1fr auto; gap:12px;
       background: color-mix(in oklab, var(--panel) 94%, transparent);
       border:1px solid color-mix(in oklab, var(--line) 80%, transparent);
-      border-radius: 20px; padding:14px;
-      box-shadow: 0 10px 40px rgba(0,0,0,.28);
+      border-radius: 22px; padding:14px; box-shadow: var(--shadow);
       backdrop-filter: blur(6px);
     }
+
     .topbar{
-      display:flex; align-items:center; gap:10px; justify-content:space-between;
-      padding:10px; border:1px solid var(--line); border-radius:14px;
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      padding:10px 12px; border:1px solid var(--line); border-radius:14px;
       background:linear-gradient(180deg, color-mix(in oklab, var(--panel) 96%, transparent), var(--panel));
     }
-    .brand{ display:flex; gap:10px; align-items:center; font-weight:700 }
-    .pulse{ width:10px; height:10px; border-radius:999px; background:var(--accent); box-shadow:0 0 14px var(--accent) }
-    .actions{ display:flex; gap:8px; align-items:center }
-    .iconbtn{
-      display:inline-flex; align-items:center; justify-content:center; gap:8px;
-      padding:10px 12px; border-radius:12px; border:1px solid var(--line); cursor:pointer;
-      background:linear-gradient(180deg, color-mix(in oklab, var(--panel) 96%, transparent), var(--panel));
-      color:var(--text); font-weight:600;
+    .brand{ display:flex; gap:12px; align-items:center; font-weight:800; letter-spacing:.02em }
+    .nabla{
+      width:28px; height:28px; border-radius:50%;
+      background: conic-gradient(from 210deg at 50% 50%, var(--accent), var(--accent2));
+      display:grid; place-items:center; color:#021016; font-family: var(--math); font-size: 18px; font-weight:900;
+      box-shadow: 0 0 18px color-mix(in oklab, var(--accent) 60%, transparent);
     }
+    .hint{ color:var(--muted); font-family: var(--math); }
+
     .messages{
-      overflow:auto; padding:10px; display:flex; flex-direction:column; gap:12px;
-      scroll-behavior:smooth; background: color-mix(in oklab, var(--panel-2) 100%, transparent);
+      overflow:auto; padding:12px; display:flex; flex-direction:column; gap:12px;
+      scroll-behavior:smooth; background: color-mix(in oklab, var(--panel-2) 98%, transparent);
       border:1px solid var(--line); border-radius:14px;
+      mask-image: linear-gradient(180deg, transparent, black 10%, black 90%, transparent);
     }
-    .row{ display:flex; gap:8px; align-items:flex-end }
+    .row{ display:flex; gap:10px; align-items:flex-end }
     .avatar{
-      width:34px; height:34px; border-radius:999px; flex:none;
-      background: radial-gradient(circle at 30% 30%, var(--accent), var(--accent-2));
+      width:36px; height:36px; border-radius:999px; flex:none;
+      background:
+        radial-gradient(30% 30% at 30% 30%, var(--accent), transparent),
+        radial-gradient(30% 30% at 70% 70%, var(--accent2), transparent),
+        color-mix(in oklab, var(--panel) 92%, transparent);
       border:1px solid var(--line);
     }
     .bubble{
-      max-width:78%; padding:12px 14px; border-radius:16px; line-height:1.5;
-      background:linear-gradient(180deg, color-mix(in oklab, var(--panel) 94%, transparent), var(--panel));
+      max-width:78%; padding:12px 14px; border-radius:18px; line-height:1.55;
+      background:
+        radial-gradient(200% 120% at 10% -20%, color-mix(in oklab, var(--accent) 18%, transparent), transparent 40%),
+        linear-gradient(180deg, color-mix(in oklab, var(--panel) 96%, transparent), var(--panel));
       border:1px solid var(--line); white-space:pre-wrap; word-break:break-word;
+      box-shadow: 0 2px 0 color-mix(in oklab, var(--line) 70%, transparent) inset;
     }
-    .me .bubble{ background:linear-gradient(180deg, color-mix(in oklab, var(--accent) 24%, var(--panel)), var(--panel)); border-bottom-right-radius:6px }
-    .bot .bubble{ border-bottom-left-radius:6px }
-    .sys{ align-self:center; color:var(--muted); font-size:.95rem; padding:8px 10px; border:1px dashed var(--line); border-radius:12px }
+    .me .bubble{
+      background:
+        radial-gradient(220% 120% at 100% -10%, color-mix(in oklab, var(--accent2) 18%, transparent), transparent 40%),
+        linear-gradient(180deg, color-mix(in oklab, var(--panel) 96%, transparent), var(--panel));
+      border-bottom-right-radius: 6px;
+    }
+    .bot .bubble{ border-bottom-left-radius: 6px }
+
+    .sys{
+      align-self:center; color:var(--muted); font-size:.95rem; padding:8px 10px;
+      border:1px dashed var(--line); border-radius:12px; font-family: var(--math);
+    }
     .meta{ display:flex; gap:10px; align-items:center; color:var(--muted); font-size:.8rem; margin-top:4px }
     .copy{ border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:.85rem; padding:2px 6px; border-radius:8px }
     .copy:hover{ color:var(--text); background: color-mix(in oklab, var(--panel) 90%, transparent) }
-    .thinking{ display:inline-flex; gap:4px; align-items:center; color:var(--muted) }
-    .thinking i{ width:6px; height:6px; border-radius:999px; background:currentColor; opacity:.4; animation:b 1.2s infinite }
+
+    .thinking { display:inline-flex; gap:8px; align-items:center; color:var(--muted); font-family: var(--math) }
+    .thinking .ddt{
+      display:inline-grid; place-items:center; border:1px solid var(--line); padding:3px 6px; border-radius:8px;
+      background:linear-gradient(180deg, color-mix(in oklab, var(--panel) 92%, transparent), var(--panel));
+      box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--panel) 85%, transparent);
+      font-style: italic;
+    }
+    .thinking i{ width:6px; height:6px; border-radius:999px; background:currentColor; opacity:.35; animation:b 1.2s infinite }
     .thinking i:nth-child(2){animation-delay:.15s} .thinking i:nth-child(3){animation-delay:.30s}
-    @keyframes b{ 0%,80%,100%{transform:translateY(0);opacity:.35} 40%{transform:translateY(-4px);opacity:.85} }
+    @keyframes b{ 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-4px); opacity:.9}}
+
     .input{
-      display:flex; gap:10px; align-items:flex-end; padding:8px; border-radius:14px;
+      display:grid; grid-template-columns: 1fr auto auto; gap:10px; align-items:end; padding:8px;
+      border-radius:14px; border:1px solid var(--line);
       background:linear-gradient(180deg, color-mix(in oklab, var(--panel) 96%, transparent), var(--panel));
-      border:1px solid var(--line);
     }
     textarea{
-      flex:1; resize:none; min-height:44px; max-height:160px; padding:12px 14px; border-radius:12px; outline:none;
-      border:1px solid transparent; background:color-mix(in oklab, var(--panel) 94%, transparent); color:var(--text); font-size:1rem;
+      resize:none; min-height:48px; max-height:160px;
+      padding:12px 14px; border-radius:12px; outline:none; border:1px solid transparent;
+      background:color-mix(in oklab, var(--panel) 94%, transparent); color:var(--text); font-size:1rem;
     }
-    .send{ padding:12px 16px; border-radius:12px; border:1px solid var(--line); background:linear-gradient(180deg, color-mix(in oklab, var(--accent) 50%, var(--panel)), var(--panel)); color:#fff; font-weight:700; cursor:pointer }
-    .stop{ padding:12px 12px; border-radius:12px; border:1px solid var(--line); background:linear-gradient(180deg, color-mix(in oklab, #ef4444 40%, var(--panel)), var(--panel)); color:#fff; font-weight:700; cursor:pointer }
+    .btn{
+      user-select:none; display:inline-grid; place-items:center; gap:6px; padding:10px 14px;
+      border-radius:12px; border:1px solid var(--line); font-weight:800; cursor:pointer;
+      background:linear-gradient(180deg, color-mix(in oklab, var(--panel) 94%, transparent), var(--panel));
+      color:var(--text); font-family: var(--math);
+    }
+    .send{ 
+      background: conic-gradient(from 210deg at 50% 50%, color-mix(in oklab, var(--accent) 55%, var(--panel)), var(--panel));
+      color:#001017; border:1px solid color-mix(in oklab, var(--accent) 30%, #000 70%);
+      font-size: 18px;
+    }
+    .stop{
+      background: conic-gradient(from 30deg at 50% 50%, color-mix(in oklab, #ef4444 50%, var(--panel)), var(--panel));
+      color:#170002; border:1px solid color-mix(in oklab, #ef4444 30%, #000 70%); display:none;
+    }
+
+    /* Drag overlay per MP3 */
     .drop{
       position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.35); z-index:50;
-      color:#fff; font-size:1.2rem; text-align:center; padding:20px;
+      color:#fff; font-size:1.1rem; text-align:center; padding:20px; font-family: var(--math);
+      backdrop-filter: blur(2px);
     }
     .drop.active{ display:grid }
     .toast{
@@ -110,32 +173,31 @@
 <body>
   <main class="app" aria-label="Chat Manuel AI">
     <header class="topbar">
-      <div class="brand"><span class="pulse" aria-hidden="true"></span> Manuel • Assistente</div>
-      <div class="actions">
-        <span id="status" class="hint">Pronto</span>
-        <button id="newChat" class="iconbtn" title="Nuova chat">Nuova chat</button>
-        <button id="exportTxt" class="iconbtn" title="Esporta .txt">Esporta</button>
+      <div class="brand">
+        <div class="nabla" title="∇">∇</div>
+        <div>Manuel • <span style="font-family:var(--math)">Assistant</span></div>
       </div>
+      <div class="hint" id="status">Pronto</div>
     </header>
 
     <section class="messages" id="messages" aria-live="polite" aria-busy="false">
-      <div class="sys" id="welcome">Benvenuto! Questa è la chat di Manuel: risposte rapide, chiare e senza HTML attivo. Musica di sottofondo attiva automaticamente (se il browser lo consente).</div>
+      <div class="sys">Benvenuto! Interfaccia a tema matematico. HTML delle risposte disattivato; musica di sottofondo se presente.</div>
     </section>
 
     <footer class="input">
       <textarea id="box" placeholder="Scrivi un messaggio… (Invio invia • Shift+Invio va a capo)" autocomplete="off"></textarea>
-      <button id="stop" class="stop" style="display:none">Stop</button>
-      <button id="send" class="send">Invia</button>
+      <button id="stop" class="btn stop" title="Interrompi">∂t</button>
+      <button id="send" class="btn send" title="Invia">∇</button>
     </footer>
   </main>
 
-  <!-- Musica di sottofondo: parte da sola (autoplay). Metti il tuo file in public/music/autoplay.mp3 -->
-  <audio id="bgm" src="music/autoplay.mp3" preload="auto" loop playsinline autoplay></audio>
+  <!-- audio: src impostata via JS solo se il file esiste, per evitare 404 -->
+  <audio id="bgm" preload="auto" loop playsinline></audio>
 
   <div class="drop" id="drop">
     <div>
-      <strong>Rilascia qui il tuo MP3</strong><br/>
-      Sostituirò la musica di sottofondo e partirà subito.
+      <strong>Rilascia qui un MP3</strong><br/>
+      Lo userò come musica di sottofondo (autoplay + fade-in).
     </div>
   </div>
   <div class="toast" id="toast" style="display:none"></div>
@@ -147,98 +209,87 @@
     const send = $("#send");
     const stopBtn = $("#stop");
     const statusEl = $("#status");
-    const newChat = $("#newChat");
-    const exportTxt = $("#exportTxt");
-    const bgm = $("#bgm");
     const drop = $("#drop");
     const toast = $("#toast");
+    const bgm = $("#bgm");
 
     const FN_URL = "/.netlify/functions/gptHandler";
+    const AUDIO_URL = "music/autoplay.mp3"; // Metti il file esatto in public/music/autoplay.mp3 (case-sensitive)
 
-    // ---------- UI helpers ----------
-    function showToast(text, ms=2000){
-      toast.textContent = text;
-      toast.style.display = "block";
-      clearTimeout(showToast._t);
-      showToast._t = setTimeout(()=> toast.style.display = "none", ms);
+    /* ---------- helpers ---------- */
+    function showToast(text, ms=2200){
+      toast.textContent = text; toast.style.display = "block";
+      clearTimeout(showToast._t); showToast._t = setTimeout(()=> toast.style.display = "none", ms);
     }
-    function fmtTime(d=new Date()){
-      return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    }
+    const t2 = (d=new Date()) => d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 
     function addRow(role, text){
       const row = document.createElement("div");
       row.className = "row " + (role === "user" ? "me" : "bot");
+
       const avatar = document.createElement("div");
       avatar.className = "avatar";
       row.appendChild(avatar);
+
       const wrap = document.createElement("div");
       const bubble = document.createElement("div");
       bubble.className = "bubble";
-      bubble.textContent = text; // ← NO innerHTML: l'AI non può iniettare HTML
+      bubble.textContent = text; // NO innerHTML → niente HTML dalle risposte
       wrap.appendChild(bubble);
+
       const meta = document.createElement("div");
       meta.className = "meta";
       const time = document.createElement("span");
-      time.textContent = fmtTime();
+      time.textContent = t2();
       const copy = document.createElement("button");
-      copy.className = "copy";
-      copy.textContent = "Copia";
+      copy.className = "copy"; copy.textContent = "Copia";
       copy.addEventListener("click", ()=> navigator.clipboard.writeText(text).then(()=> showToast("Copiato")));
-      meta.appendChild(time);
-      meta.appendChild(copy);
+      meta.appendChild(time); meta.appendChild(copy);
       wrap.appendChild(meta);
-      row.appendChild(wrap);
-      messages.appendChild(row);
-      messages.scrollTop = messages.scrollHeight;
-      return bubble;
-    }
 
-    function addThinking(){
-      const row = document.createElement("div");
-      row.className = "row bot";
-      const avatar = document.createElement("div");
-      avatar.className = "avatar";
-      row.appendChild(avatar);
-      const bubble = document.createElement("div");
-      bubble.className = "bubble";
-      bubble.innerHTML = '<span class="thinking"><i></i><i></i><i></i></span> Sto pensando…';
-      row.appendChild(bubble);
+      row.appendChild(wrap);
       messages.appendChild(row);
       messages.scrollTop = messages.scrollHeight;
       return row;
     }
 
-    // ---------- Cronologia (LocalStorage) ----------
-    const HISTORY_KEY = "manuel_chat_history_v2";
-    function loadHistory(){
-      try{
-        const arr = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-        arr.forEach(item => addRow(item.role, item.text));
-      }catch{}
-    }
-    function saveToHistory(role, text){
-      try{
-        const arr = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-        arr.push({role, text, t: Date.now()});
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(arr.slice(-200)));
-      }catch{}
-    }
-    function clearHistory(){
-      localStorage.removeItem(HISTORY_KEY);
-      messages.innerHTML = '<div class="sys" id="welcome">Benvenuto! Questa è la chat di Manuel: risposte rapide, chiare e senza HTML attivo. Musica di sottofondo attiva automaticamente (se il browser lo consente).</div>';
+    function addThinking(){
+      const row = document.createElement("div");
+      row.className = "row bot";
+      row.innerHTML = `
+        <div class="avatar"></div>
+        <div class="bubble">
+          <span class="thinking">
+            <span class="ddt">d⟨risposta⟩/dt</span>
+            <i></i><i></i><i></i>
+          </span>
+        </div>`;
+      messages.appendChild(row);
+      messages.scrollTop = messages.scrollHeight;
+      return row;
     }
 
-    // ---------- Invio / Stop ----------
+    /* ---------- history ---------- */
+    const HK = "manuel_chat_math_history";
+    function loadHistory(){
+      try{ (JSON.parse(localStorage.getItem(HK) || "[]")).forEach(m=> addRow(m.role, m.text)); }catch{}
+    }
+    function save(role, text){
+      try{
+        const a = JSON.parse(localStorage.getItem(HK) || "[]");
+        a.push({role, text, t: Date.now()});
+        localStorage.setItem(HK, JSON.stringify(a.slice(-200)));
+      }catch{}
+    }
+
+    /* ---------- send / stop ---------- */
     let controller = null;
     async function sendMessage(){
       const text = box.value.trim();
       if(!text) return;
-      addRow("user", text);
-      saveToHistory("user", text);
-      box.value = ""; box.style.height = "44px";
-      box.disabled = true; send.disabled = true; statusEl.textContent = "Invio in corso…";
-      stopBtn.style.display = "inline-block";
+      addRow("user", text); save("user", text);
+      box.value=""; box.style.height="48px";
+      box.disabled = true; send.disabled = true; stopBtn.style.display="inline-grid"; statusEl.textContent = "∂risposta/∂t…";
 
       const thinking = addThinking();
       controller = new AbortController();
@@ -249,56 +300,37 @@
           body: JSON.stringify({ message: text }),
           signal: controller.signal
         });
-        if(!res.ok){
-          thinking.remove();
-          addRow("bot", `Errore server (${res.status}). Riprova tra poco.`);
-          return;
-        }
+        if(!res.ok){ throw new Error("HTTP "+res.status); }
         const data = await res.json();
         thinking.remove();
         const reply = (data && data.reply) ? String(data.reply) : "Nessuna risposta.";
-        addRow("bot", reply);
-        saveToHistory("bot", reply);
-      }catch(err){
+        addRow("bot", reply); save("bot", reply);
+      }catch(e){
         thinking.remove();
-        addRow("bot", err.name === "AbortError" ? "Risposta interrotta." : "Errore di connessione. Riprova più tardi.");
+        addRow("bot", e.name === "AbortError" ? "Risposta interrotta." : "Errore di connessione. Riprova più tardi.");
       }finally{
-        box.disabled = false; send.disabled = false; statusEl.textContent = "Pronto"; box.focus();
-        stopBtn.style.display = "none";
+        box.disabled = false; send.disabled = false; stopBtn.style.display="none"; statusEl.textContent = "Pronto"; box.focus();
         controller = null;
       }
     }
     stopBtn.addEventListener("click", ()=> controller?.abort());
 
-    // ---------- UX ----------
+    /* ---------- UX ---------- */
     box.addEventListener("input", ()=>{
-      box.style.height = "44px";
-      box.style.height = Math.min(box.scrollHeight, 160) + "px";
+      box.style.height="48px";
+      box.style.height=Math.min(box.scrollHeight, 160)+"px";
     });
-    box.addEventListener("keydown", (e)=>{
-      if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); sendMessage(); }
-    });
+    box.addEventListener("keydown", (e)=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendMessage(); }});
     send.addEventListener("click", sendMessage);
-    newChat.addEventListener("click", ()=>{ clearHistory(); showToast("Nuova chat"); });
-    exportTxt.addEventListener("click", ()=>{
-      const arr = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
-      const lines = arr.map(x => `[${x.role.toUpperCase()}] ${new Date(x.t || Date.now()).toLocaleString()}\n${x.text}\n`);
-      const blob = new Blob([lines.join("\n")], {type:"text/plain"});
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "chat-manuel.txt";
-      a.click();
-      URL.revokeObjectURL(a.href);
-    });
 
-    // ---------- Drag & Drop MP3 (cambia musica al volo) ----------
+    /* ---------- Drag & Drop MP3 (no 404, swap immediato) ---------- */
     ["dragenter","dragover"].forEach(ev => window.addEventListener(ev, e=>{
       if([...e.dataTransfer?.items || []].some(i => i.type.startsWith("audio/"))){
-        e.preventDefault(); document.querySelector("#drop").classList.add("active");
+        e.preventDefault(); drop.classList.add("active");
       }
     }));
     ["dragleave","drop"].forEach(ev => window.addEventListener(ev, e=>{
-      e.preventDefault(); document.querySelector("#drop").classList.remove("active");
+      e.preventDefault(); drop.classList.remove("active");
     }));
     window.addEventListener("drop", e=>{
       const file = [...e.dataTransfer.files].find(f => f.type.startsWith("audio/"));
@@ -308,72 +340,45 @@
       showToast("Musica aggiornata");
     });
 
-    // ---------- Musica di sottofondo (autoplay + fallback) ----------
-    let desiredVolume = Number(localStorage.getItem("bgm_volume") || 0.25);
+    /* ---------- Musica: HEAD check, autoplay + fade ---------- */
+    let desiredVolume = Number(localStorage.getItem("bgm_volume") || 0.22);
     desiredVolume = Math.max(0, Math.min(1, desiredVolume));
 
     function fadeTo(target=desiredVolume, ms=1500){
-      const start = bgm.volume;
-      const t0 = performance.now();
-      function step(t){
-        const k = Math.min(1, (t - t0)/ms);
-        bgm.volume = start + (target - start)*k;
-        if(k < 1) requestAnimationFrame(step);
-      }
+      const start = bgm.volume; const t0 = performance.now();
+      function step(t){ const k = Math.min(1, (t - t0)/ms); bgm.volume = start + (target - start)*k; if(k<1) requestAnimationFrame(step); }
       requestAnimationFrame(step);
     }
 
-    async function tryPlayAutoplay(){
+    async function ensureAndPlay(src){
       try{
-        bgm.volume = 0.0001; // quasi muto, migliora chance di autoplay
-        bgm.muted = false;
-        const p = bgm.play();
-        if(p && p.then){ await p; }
+        const head = await fetch(src, { method:"HEAD" });
+        if(!head.ok) throw new Error("Audio non trovato");
+        bgm.src = src; bgm.volume = 0.0001; bgm.muted = false;
+        const p = bgm.play(); if(p && p.then) await p;
         setTimeout(()=> fadeTo(desiredVolume, 1600), 200);
+        showToast("Musica: avviata");
       }catch{
-        // Autoplay bloccato → parte alla prima interazione
-        const unlock = ()=>{
-          bgm.play().then(()=> fadeTo(desiredVolume, 1600)).catch(()=>{});
-          window.removeEventListener("pointerdown", unlock);
-          window.removeEventListener("keydown", unlock);
-        };
-        window.addEventListener("pointerdown", unlock, { once:true });
-        window.addEventListener("keydown", unlock, { once:true });
+        showToast("Nessun audio: aggiungi public/music/autoplay.mp3");
       }
     }
 
     function swapMusic(src){
-      const wasPlaying = !bgm.paused;
-      bgm.pause();
-      bgm.src = src;
-      bgm.load();
-      if(wasPlaying){ tryPlayAutoplay(); }
+      const was = !bgm.paused;
+      bgm.pause(); bgm.src = src; bgm.load();
+      if(was){ ensureAndPlay(src); }
     }
 
-    // Scorciatoie: M per muto, + / - per volume
+    // Scorciatoie: M (mute), + / - (volume)
     window.addEventListener("keydown", (e)=>{
-      if(e.key.toLowerCase() === "m"){
-        bgm.muted = !bgm.muted;
-        showToast(bgm.muted ? "Musica in muto (M per riattivare)" : "Musica attiva");
-      }
-      if(e.key === "+" || e.key === "="){
-        desiredVolume = Math.min(1, desiredVolume + 0.05); localStorage.setItem("bgm_volume", desiredVolume);
-        if(!bgm.muted){ bgm.volume = desiredVolume; }
-        showToast("Volume: " + Math.round(desiredVolume*100) + "%");
-      }
-      if(e.key === "-"){
-        desiredVolume = Math.max(0, desiredVolume - 0.05); localStorage.setItem("bgm_volume", desiredVolume);
-        if(!bgm.muted){ bgm.volume = desiredVolume; }
-        showToast("Volume: " + Math.round(desiredVolume*100) + "%");
-      }
+      if(e.key.toLowerCase()==="m"){ bgm.muted = !bgm.muted; showToast(bgm.muted?"Musica in muto":"Musica attiva"); }
+      if(e.key==="+" || e.key==="="){ desiredVolume=Math.min(1, desiredVolume+0.05); localStorage.setItem("bgm_volume", desiredVolume); if(!bgm.muted){ bgm.volume=desiredVolume;} showToast("Volume: "+Math.round(desiredVolume*100)+"%"); }
+      if(e.key==="-"){ desiredVolume=Math.max(0, desiredVolume-0.05); localStorage.setItem("bgm_volume", desiredVolume); if(!bgm.muted){ bgm.volume=desiredVolume;} showToast("Volume: "+Math.round(desiredVolume*100)+"%"); }
     });
 
-    // Init
+    /* ---------- init ---------- */
     loadHistory();
-    document.addEventListener("visibilitychange", ()=>{
-      if(!document.hidden && bgm.paused){ tryPlayAutoplay(); }
-    });
-    tryPlayAutoplay();
+    ensureAndPlay(AUDIO_URL); // niente 404: prima controllo, poi setto src
     box.focus();
   </script>
 </body>
