@@ -1,16 +1,21 @@
-# Chat AI con OpenAI Assistants API
+# Chat Manuel Assistant – Improved
 
-## Hosting
-Deploy automatico su Netlify da GitHub.
+**Hosting**: Netlify (Functions + static).
 
-## Requisiti
-- `OPENAI_API_KEY` (nel pannello Netlify → Site Settings → Environment Variables)
-- `OPENAI_ASSISTANT_ID` (configurato su platform.openai.com → Assistant)
+## Variabili d’ambiente (Netlify → Site Settings → Environment Variables)
+- `OPENAI_API_KEY`
+- `OPENAI_ASSISTANT_ID`
 
 ## Struttura
-- `public/index.html` → interfaccia utente
-- `netlify/functions/gptHandler.js` → backend API sicuro
-
-## Deploy
-1. Push su GitHub
-2. Netlify lo prende e lo pubblica
+```
+/index.html
+/netlify/functions/gptHandler.js
+/netlify.toml
+/package.json
+/README.md
+```
+## Note
+- Polling robusto fino a ~55s per evitare `Timeout risposta AI`.
+- Modello di riassunto: `gpt-4o-mini` (economico/veloce).
+- UI più fluida (autoscroll intelligente, typing indicator, tema persistente, invio con Invio).
+- Nessun testo “autocelebrativo”: messaggio iniziale semplice e chiaro.
