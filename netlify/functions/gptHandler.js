@@ -1,135 +1,95 @@
-// netlify/functions/gptHandler.js
-// Migliorato: thread persistenti, override istruzioni per-run, polling robusto, errori chiari
-// Niente riassunto bloccante: più veloce e stabile su Netlify Free
+// netlify/functions/chatDirect.js
+// Chiamata diretta Chat Completions: ogni richiesta usa estratti dal CV e dalla Storyline
 
 import { OpenAI } from "openai";
+import fs from "fs/promises";
+import path from "path";
+import pdfParse from "pdf-parse";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-const ASSISTANT_ID = process.env.OPENAI_ASSISTANT_ID;
+let corpusCache = null;
 
-/**
- * Utility: attende ms
- */
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function loadCorpus(){
+  if (corpusCache) return corpusCache;
+  const base = path.dirname(new URL(import.meta.url).pathname);
+  const root = path.resolve(base, "../../");
+  const storyPath = path.join(root, "storyline_manuel.txt");
+  const cvPath = path.join(root, "cv_MFE.pdf");
 
-/**
- * Poll run status entro un budget di tempo (≈ 9s, compatibile con Netlify Free)
- */
-async function waitForRunCompletion(threadId, runId, maxAttempts = 30, delayMs = 300) {
-  let attempts = 0;
-  while (attempts < maxAttempts) {
-    const run = await openai.beta.threads.runs.retrieve(threadId, runId);
+  const [storyText, cvBuf] = await Promise.all([
+    fs.readFile(storyPath, "utf8").catch(()=>""),
+    fs.readFile(cvPath).catch(()=>null)
+  ]);
 
-    if (run.status === "completed") return run;
-    if (run.status === "requires_action") {
-      // Non gestiamo tool-calls in questo flow minimal: termina con messaggio chiaro
-      throw new Error("L'assistente richiede un'azione (tool). Disabilita tool o aggiorna il flow.");
-    }
-    if (["failed", "cancelled", "expired"].includes(run.status)) {
-      throw new Error(`Run terminata con stato: ${run.status}`);
-    }
-
-    await sleep(delayMs);
-    attempts++;
+  let cvText = "";
+  if (cvBuf){
+    try{ const parsed = await pdfParse(cvBuf); cvText = parsed.text || ""; }catch(e){ cvText = ""; }
   }
-  throw new Error("Timeout risposta AI (limite Netlify). Prova di nuovo.");
+
+  corpusCache = { storyText, cvText };
+  return corpusCache;
 }
 
-/**
- * Estrae l'ultimo messaggio dell'assistente in modo affidabile
- */
-async function getLastAssistantMessage(threadId) {
-  const list = await openai.beta.threads.messages.list(threadId, { order: "desc", limit: 10 });
-  const msg = list.data.find((m) => m.role === "assistant");
-  if (!msg) return null;
-
-  // Supporto contenuti misti; qui estraiamo solo testo
-  const part = msg.content.find((c) => c.type === "text");
-  return part?.text?.value ?? null;
+function chunk(text, size = 1200, overlap = 120){
+  if (!text) return [];
+  const out = []; let i = 0; const n = text.length;
+  while (i < n){ out.push(text.slice(i, i + size)); i += Math.max(1, size - overlap); }
+  return out;
 }
 
-export async function handler(event) {
-  if (!process.env.OPENAI_API_KEY || !ASSISTANT_ID) {
-    return {
-      statusCode: 500,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ error: "Variabili ambiente mancanti: OPENAI_API_KEY/OPENAI_ASSISTANT_ID" }),
-    };
-  }
+function pickRelevant(query, chunks, topK = 6){
+  const q = (query || "").toLowerCase().split(/[^a-zà-ù0-9]+/i).filter(Boolean);
+  const score = (c) => {
+    const lc = c.toLowerCase();
+    let s = 0; for (const t of q){ if (!t) continue; const hits = lc.split(t).length - 1; s += hits * (t.length > 3 ? 2 : 1); }
+    return s;
+  };
+  const scored = chunks.map(c => ({ c, s: score(c) }));
+  scored.sort((a,b)=>b.s-a.s);
+  return scored.slice(0, Math.min(topK, scored.length)).map(o=>o.c);
+}
 
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, body: "Method Not Allowed" };
-  }
+export async function handler(event){
+  if (event.httpMethod !== "POST") return { statusCode: 405, body: "Method Not Allowed" };
+  try{
+    const { message, behavior = "", history = [] } = JSON.parse(event.body || "{}");
+    if (!message) return { statusCode: 400, body: JSON.stringify({ ok:false, error:"Parametro 'message' mancante" }) };
 
-  try {
-    const { action = "message", message, threadId, extraInstructions } = JSON.parse(event.body || "{}");
+    const { storyText, cvText } = await loadCorpus();
+    const allChunks = [ ...chunk(storyText), ...chunk(cvText) ];
+    const q = [ ...history.filter(h=>h.role==='user').slice(-2).map(h=>h.text), message ].join(" \n ");
+    const ctx = pickRelevant(q, allChunks, 6);
 
-    if (action === "init") {
-      const thread = await openai.beta.threads.create({
-        // Puoi salvare contesto iniziale direttamente nel thread via metadata
-        // metadata: { app: "manuel-chat", version: "v2" }
-      });
-      return {
-        statusCode: 200,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ok: true, threadId: thread.id }),
-      };
-    }
+    const system = [
+      "Sei l'assistente privato di Manuel. Regole:",
+      "- Rispondi in italiano, conciso e diretto.",
+      "- Quando la domanda riguarda profilo/cv/esperienze/skill, usa SOLO le informazioni nei CONTENUTI allegati.",
+      "- Se l'informazione non è nei documenti, dillo chiaramente.",
+      "- Niente opinioni o inferenze personali.",
+      behavior ? `- Comportamento extra: ${behavior}` : null
+    ].filter(Boolean).join("\n");
 
-    if (action === "reset") {
-      const thread = await openai.beta.threads.create();
-      return {
-        statusCode: 200,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ok: true, threadId: thread.id }),
-      };
-    }
+    const contentBlock = ctx.length ? `=== CONTENUTI (estratti) ===\n${ctx.join("\n---\n")}\n=== FINE CONTENUTI ===` : "";
 
-    if (action === "message") {
-      if (!message || typeof message !== "string") {
-        return { statusCode: 400, body: JSON.stringify({ error: "Parametro 'message' mancante" }) };
-      }
+    const messages = [
+      { role: "system", content: system },
+      contentBlock ? { role: "system", content: contentBlock } : null,
+      ...history.map(h => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: h.text })),
+      { role: "user", content: message }
+    ].filter(Boolean);
 
-      // Se non c'è un thread, creane uno al volo
-      let _threadId = threadId;
-      if (!_threadId) {
-        const thread = await openai.beta.threads.create();
-        _threadId = thread.id;
-      }
+    const completion = await openai.chat.completions.create({
+      model: MODEL,
+      messages,
+      temperature: 0.2,
+    });
 
-      // Aggiungi messaggio utente al thread
-      await openai.beta.threads.messages.create(_threadId, {
-        role: "user",
-        content: message,
-      });
-
-      // Avvia run con assistant scelto; opzionale override istruzioni per-run
-      const run = await openai.beta.threads.runs.create(_threadId, {
-        assistant_id: ASSISTANT_ID,
-        ...(extraInstructions ? { instructions: extraInstructions } : {}),
-      });
-
-      // Poll entro 9s
-      await waitForRunCompletion(_threadId, run.id);
-
-      // Recupera ultima risposta
-      const text = await getLastAssistantMessage(_threadId);
-
-      return {
-        statusCode: 200,
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ok: true, threadId: _threadId, reply: text ?? "(nessun testo)" }),
-      };
-    }
-
-    return { statusCode: 400, body: JSON.stringify({ error: `Azione non supportata: ${action}` }) };
-  } catch (err) {
-    console.error("SERVER ERROR:", err);
-    return {
-      statusCode: 200, // evitiamo 5xx per non mostrare pagina Netlify error
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ok: false, error: String(err?.message || err) }),
-    };
+    const reply = completion.choices?.[0]?.message?.content || "";
+    return { statusCode: 200, headers:{"content-type":"application/json"}, body: JSON.stringify({ ok:true, reply }) };
+  }catch(err){
+    console.error("DIRECT ERROR:", err);
+    return { statusCode: 200, headers:{"content-type":"application/json"}, body: JSON.stringify({ ok:false, error: String(err?.message || err) }) };
   }
 }
