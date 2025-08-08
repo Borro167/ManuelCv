@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Manuel • Assistente</title>
-  <meta name="description" content="Assistente personale di Manuel: chat avanzata con history, reset, impostazioni e salvataggio thread." />
+  <meta name="description" content="Assistente personale di Manuel: chat avanzata con esportazione PDF e comportamento personalizzabile." />
   <style>
     :root{
       --bg:#0f1320; --surface:#151a2c; --surface-2:#1c2340; --text:#e9ecf7; --muted:#aab1c7;
@@ -34,7 +34,7 @@
     .history button.active{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary) inset}
 
     .controls{display:flex;gap:8px;margin-top:10px}
-    .controls button, .controls a{flex:1;padding:10px 12px;border:1px solid var(--border);background:#12172a;color:var(--text);border-radius:12px;cursor:pointer;text-decoration:none;text-align:center}
+    .controls button{flex:1;padding:10px 12px;border:1px solid var(--border);background:#12172a;color:var(--text);border-radius:12px;cursor:pointer}
 
     /* Chat */
     .chat{flex:1;display:flex;flex-direction:column}
@@ -66,11 +66,11 @@
     .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px;background:var(--success)}
 
     /* Drawer impostazioni */
-    .drawer{position:fixed;right:16px;top:16px;background:#0e1427;border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:14px;width:320px;max-width:92vw;display:none}
+    .drawer{position:fixed;right:16px;top:16px;background:#0e1427;border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow);padding:14px;width:360px;max-width:92vw;display:none}
     .drawer.open{display:block}
     .row{display:flex;flex-direction:column;gap:6px;margin:8px 0}
-    .row input, .row select, .row textarea{background:#0f172e;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px}
-    .row small{opacity:.7}
+    .row textarea{background:#0f172e;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px}
+    .row .info{font-size:12px;color:var(--muted);line-height:1.4;background:#0c1226;border:1px dashed var(--border);padding:10px;border-radius:10px}
 
     @media (max-width: 900px){
       .app{grid-template-columns:1fr}
@@ -87,14 +87,6 @@
         <div id="history" class="history"></div>
         <div class="controls">
           <button id="newChat">Nuova</button>
-          <button id="clearAll">Pulisci</button>
-        </div>
-      </div>
-      <div class="section">
-        <div class="section-title">Azioni rapide</div>
-        <div class="controls">
-          <button id="exportBtn">Esporta</button>
-          <a id="helpLink" href="#">Help</a>
         </div>
       </div>
     </aside>
@@ -103,9 +95,10 @@
       <header>
         <div class="left">
           <div class="pill"><span class="status-dot" id="statusDot"></span><span id="statusText">Pronto</span></div>
-          <div class="pill">Thread: <span id="threadShort">—</span></div>
+          <div class="pill">Modalità: Direct API</div>
         </div>
         <div class="right">
+          <button id="exportPdf" class="pill">Esporta PDF</button>
           <button id="openSettings" class="pill">Impostazioni</button>
         </div>
       </header>
@@ -123,24 +116,26 @@
   <!-- Drawer Impostazioni -->
   <div id="drawer" class="drawer">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-      <strong>Impostazioni chat</strong>
+      <strong>Comportamento</strong>
       <button id="closeSettings" class="pill">Chiudi</button>
     </div>
     <div class="row">
-      <label>"Istruzioni extra" per-run (non tocca l'Assistant)</label>
-      <textarea id="extraInstructions" rows="4" placeholder="Esempio: Rispondi in 2 frasi concise, niente emoji."></textarea>
-      <small>Viene passato a ogni run come override delle instructions.</small>
+      <label>Istruzioni di comportamento (per ogni chiamata)</label>
+      <textarea id="behavior" rows="5" placeholder="Esempio: Rispondi in modo telegrafico, niente opinioni, cita sempre i documenti."></textarea>
     </div>
     <div class="row">
-      <label>Messaggio di benvenuto (solo UI)</label>
-      <input id="welcomeText" />
-      <small>Solo visuale, non viene inviato all'AI.</small>
-    </div>
-    <div class="row">
-      <button id="saveSettings">Salva impostazioni</button>
+      <div class="info">
+        <b>Come funziona</b><br>
+        • Usiamo una <i>chiamata diretta</i> alle API (senza Assistants).<br>
+        • Ad ogni richiesta inviamo estratti dei <b>tuoi file</b> (CV e Storyline) più rilevanti rispetto alla domanda.<br>
+        • Qui puoi cambiare solo il <b>comportamento</b> (istruzioni aggiunte al system prompt).<br>
+        • Il messaggio di benvenuto è solo UI e non viene inviato al modello.<br>
+        • L'esportazione crea un <b>PDF</b> della conversazione corrente, lato client.
+      </div>
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
   <script>
     // ======== STATO =========
     const el = (id) => document.getElementById(id);
@@ -150,31 +145,21 @@
     const historyEl = el('history');
     const statusDot = el('statusDot');
     const statusText = el('statusText');
-    const threadShort = el('threadShort');
 
     const drawer = el('drawer');
     el('openSettings').onclick = () => drawer.classList.add('open');
     el('closeSettings').onclick = () => drawer.classList.remove('open');
 
-    const SETTINGS_KEY = 'manuel.settings.v2';
-    const THREAD_KEY = 'manuel.threadId.v2';
-    const CHATLOG_KEY = 'manuel.chatlog.v2';
+    const SETTINGS_KEY = 'manuel.settings.v3';
+    const SESSIONS_KEY = 'manuel.sessions.v1';
 
-    let threadId = localStorage.getItem(THREAD_KEY) || null;
+    let sessions = JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]'); // [{id, ts, log:[{role, text}]}]
+    let sessionId = sessions[0]?.id || null;
+
     const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
-
-    // Default welcome
-    if (!settings.welcomeText) settings.welcomeText = 'Ciao! Sono l\'assistente personale di Manuel. Dimmi cosa ti serve.';
-
-    // UI: impostazioni
-    el('extraInstructions').value = settings.extraInstructions || '';
-    el('welcomeText').value = settings.welcomeText || '';
-    el('saveSettings').onclick = () => {
-      settings.extraInstructions = el('extraInstructions').value.trim();
-      settings.welcomeText = el('welcomeText').value.trim() || settings.welcomeText;
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-      toast('Impostazioni salvate');
-    };
+    if (!settings.behavior) settings.behavior = '';
+    el('behavior').value = settings.behavior;
+    el('behavior').oninput = () => { settings.behavior = el('behavior').value; localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); };
 
     // ======== UTIL ========
     function toast(text){
@@ -182,8 +167,6 @@
       statusDot.style.background = '#67e5a1';
       setTimeout(()=>{statusText.textContent='Pronto';}, 1200);
     }
-
-    function shortId(id){ return id ? id.slice(0,6)+'…'+id.slice(-4) : '—'; }
 
     function addBubble(text, who){
       const wrap = document.createElement('div');
@@ -204,18 +187,16 @@
       return wrap;
     }
 
-    // mini-markdown per codice ed elenchi
+    // markdown minimale
     function renderMarkdown(t){
       if(!t) return '';
-      // code block ```
       t = t.replace(/```([\s\S]*?)```/g, (m, code) => `<pre><code>${escapeHtml(code)}</code></pre><span class="copy" data-copy="${encodeURIComponent(code)}">Copia</span>`);
-      // inline code
       t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
-      // newlines
       t = t.replace(/\n/g, '<br>');
       return t;
     }
     function escapeHtml(s){ return s.replace(/[&<>"]+/g, (c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+    function stripHtml(html){ const tmp = document.createElement('div'); tmp.innerHTML = html; return tmp.textContent || tmp.innerText || ''; }
 
     function enhanceCodeBlocks(scope){
       scope.querySelectorAll('.copy').forEach(btn => {
@@ -227,76 +208,65 @@
       });
     }
 
-    function pushToHistory(id){
-      const chats = JSON.parse(localStorage.getItem(CHATLOG_KEY) || '[]');
-      if (!chats.find(c => c.threadId === id)){
-        chats.unshift({ threadId: id, ts: Date.now() });
-        localStorage.setItem(CHATLOG_KEY, JSON.stringify(chats.slice(0,20)));
-      }
-      renderHistory();
-    }
-
     function renderHistory(){
-      const chats = JSON.parse(localStorage.getItem(CHATLOG_KEY) || '[]');
       historyEl.innerHTML = '';
-      chats.forEach(c => {
+      sessions.forEach(s => {
         const b = document.createElement('button');
-        b.textContent = new Date(c.ts).toLocaleString() + ' • ' + shortId(c.threadId);
-        if (c.threadId === threadId) b.classList.add('active');
-        b.onclick = () => {
-          threadId = c.threadId;
-          localStorage.setItem(THREAD_KEY, threadId);
-          threadShort.textContent = shortId(threadId);
-          messagesEl.innerHTML = '';
-          addBubble('Nuovo contesto caricato. Continua pure.', 'bot');
-          renderHistory();
-        };
+        const date = new Date(s.ts).toLocaleString();
+        b.textContent = `${date} • ${s.id.slice(0,6)}…`;
+        if (s.id === sessionId) b.classList.add('active');
+        b.onclick = () => { saveSessions(); loadSession(s.id); };
         historyEl.appendChild(b);
       });
     }
 
-    el('newChat').onclick = async () => {
-      const r = await api({ action: 'reset' });
-      if (r?.threadId){
-        threadId = r.threadId;
-        localStorage.setItem(THREAD_KEY, threadId);
-        messagesEl.innerHTML = '';
-        addWelcome();
-        pushToHistory(threadId);
-        threadShort.textContent = shortId(threadId);
-      }
-    };
+    function newSession(){
+      const id = Math.random().toString(36).slice(2,10);
+      const sess = { id, ts: Date.now(), log: [] };
+      sessions.unshift(sess);
+      saveSessions();
+      loadSession(id);
+    }
 
-    el('clearAll').onclick = () => {
-      localStorage.removeItem(CHATLOG_KEY);
+    function loadSession(id){
+      sessionId = id;
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+      messagesEl.innerHTML = '';
+      const log = currentLog();
+      if (log.length === 0) addBubble('Ciao! Sono l\'assistente personale di Manuel. Dimmi cosa ti serve.', 'bot');
+      else log.forEach(m => addBubble(m.text, m.role === 'user' ? 'user' : 'bot'));
       renderHistory();
-      toast('Cronologia locale pulita');
+    }
+
+    function currentSession(){ return sessions.find(s => s.id === sessionId); }
+    function currentLog(){ return currentSession()?.log || []; }
+    function pushLog(role, text){ const s = currentSession(); if (!s) return; s.log.push({ role, text }); saveSessions(); }
+    function saveSessions(){ localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions)); }
+
+    el('newChat').onclick = newSession;
+
+    // Export PDF
+    el('exportPdf').onclick = () => {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      const margin = 40; const width = 515; let y = margin;
+      doc.setFontSize(12);
+      const log = currentLog();
+      log.forEach(m => {
+        const label = m.role === 'user' ? 'TU: ' : 'AI: ';
+        const lines = doc.splitTextToSize(label + stripHtml(m.text), width);
+        lines.forEach(line => { if (y > 800){ doc.addPage(); y = margin; } doc.text(line, margin, y); y += 18; });
+        y += 10;
+      });
+      doc.save(`chat-${new Date().toISOString().slice(0,19)}.pdf`);
     };
 
-    el('exportBtn').onclick = () => {
-      const data = {
-        threadId,
-        settings,
-        html: document.documentElement.outerHTML.slice(0, 200) + '…',
-        exportedAt: new Date().toISOString()
-      };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `manuel-chat-export-${Date.now()}.json`;
-      a.click();
-    };
-
-    el('helpLink').onclick = (e) => {
-      e.preventDefault();
-      addBubble('Suggerimenti: usa "Impostazioni" per override istruzioni; "Nuova" per resettare il thread senza toccare l\'Assistant.', 'bot');
-    };
-
-    // Invio messaggio
+    // Invio messaggio (API diretta)
     async function onSend(){
       const text = inputEl.value.trim();
       if (!text) return;
       addBubble(text, 'user');
+      pushLog('user', text);
       inputEl.value = '';
       inputEl.disabled = true; sendBtn.disabled = true;
 
@@ -304,12 +274,12 @@
       setStatus('In corso…', '#ffd36a');
 
       try{
-        const r = await api({ action: 'message', message: text, threadId, extraInstructions: settings.extraInstructions || undefined });
+        const r = await api({ message: text, behavior: settings.behavior, history: currentLog().slice(-12) });
         thinking.remove();
         if (r?.ok){
-          if (!threadId && r.threadId){ threadId = r.threadId; localStorage.setItem(THREAD_KEY, threadId); pushToHistory(threadId); }
-          threadShort.textContent = shortId(threadId);
-          addBubble(r.reply || '(vuoto)', 'bot');
+          const reply = r.reply || '(vuoto)';
+          addBubble(reply, 'bot');
+          pushLog('assistant', reply);
           setStatus('Pronto', '#67e5a1');
         } else {
           addBubble('Errore: ' + (r?.error || 'sconosciuto'), 'bot');
@@ -332,24 +302,16 @@
     function setStatus(text, color){ statusText.textContent = text; statusDot.style.background = color; }
 
     async function api(payload){
-      const res = await fetch('/.netlify/functions/gptHandler', {
+      const res = await fetch('/.netlify/functions/chatDirect', {
         method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload)
       });
       return res.json();
     }
 
-    function addWelcome(){ addBubble(settings.welcomeText, 'bot'); }
-
     // Boot
-    (async function init(){
+    (function init(){
+      if (!sessionId) newSession(); else loadSession(sessionId);
       renderHistory();
-      if (!threadId){
-        const r = await api({ action: 'init' });
-        threadId = r?.threadId || null;
-        if (threadId) localStorage.setItem(THREAD_KEY, threadId);
-      }
-      threadShort.textContent = shortId(threadId);
-      addWelcome();
     })();
   </script>
 </body>
