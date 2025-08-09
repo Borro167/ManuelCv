@@ -1,8 +1,9 @@
--<!doctype html>
+<!doctype html>
 <html lang="it" data-theme="dark">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="color-scheme" content="dark light" />
   <title>Manuel Assistant · Fullscreen</title>
   <style>
     :root{
@@ -19,78 +20,58 @@
       --bubble-mine:#e9edff; --bubble-theirs:#f5f7ff;
     }
     *{box-sizing:border-box}
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}
-    body{overscroll-behavior-y: contain;}
+    html,body{height:100%;margin:0}
+    body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;overscroll-behavior-y:contain}
 
-    /* App full-viewport anche su mobile (100dvh + fix iOS) */
-    .app{height:calc(var(--vh, 1vh) * 100);display:flex;flex-direction:column}
-
-    /* Area messaggi a tutta larghezza/altezza */
+    .app{height:calc(var(--vh,1vh)*100);display:flex;flex-direction:column}
     .messages{flex:1 1 auto;overflow:auto;padding:12px var(--pad-inline);display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth}
-
-    /* Bolle */
-    .bubble{padding:12px 14px;border-radius:14px;max-width:min(900px, 92vw);line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+    .bubble{max-width:min(900px,92vw);padding:12px 14px;border-radius:14px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.25)}
     .me{align-self:flex-end;background:var(--bubble-mine)}
     .bot{align-self:flex-start;background:var(--bubble-theirs)}
 
-    /* Composer fisso in fondo, con safe-area iOS */
     .composer{display:flex;gap:10px;align-items:end;padding:12px var(--pad-inline);background:var(--surface-2);border-top:1px solid var(--border)}
     .composer-inner{width:100%;display:flex;gap:10px}
-    textarea{flex:1;resize:none;min-height:44px;max-height:33dvh;border-radius:12px;padding:10px 12px;background:transparent;outline:none;color:var(--text);border:1px solid var(--border)}
-    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;background:linear-gradient(135deg,var(--primary),var(--accent));border:none;color:#fff;font-weight:700;cursor:pointer;box-shadow:var(--shadow)}
+    textarea{flex:1;resize:none;min-height:44px;max-height:33dvh;padding:10px 12px;color:var(--text);background:transparent;border:1px solid var(--border);border-radius:12px;outline:none}
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;color:#fff;background:linear-gradient(135deg,var(--primary),var(--accent));border:none;border-radius:12px;font-weight:700;cursor:pointer;box-shadow:var(--shadow)}
+    .btn[disabled]{opacity:.7;cursor:wait}
 
-    /* Status bar */
-    .mini{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;padding:10px var(--pad-inline) max(10px, env(safe-area-inset-bottom));color:var(--muted);font-size:.95em;border-top:1px solid var(--border);background:color-mix(in oklab, var(--surface) 90%, transparent)}
+    .mini{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;padding:10px var(--pad-inline) max(10px,env(safe-area-inset-bottom));color:var(--muted);font-size:.95em;border-top:1px solid var(--border);background:color-mix(in oklab, var(--surface) 90%, transparent)}
     .mini-left,.mini-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
     .chip{opacity:.9}
 
-    /* Levetta stile iPhone */
+    /* switch iPhone */
     .ios-toggle{display:inline-flex;align-items:center;gap:10px}
     .ios-toggle input{position:absolute;opacity:0;width:0;height:0}
-    .ios-toggle label{
-      position:relative;width:56px;height:32px;background:#6b7280;border-radius:999px;cursor:pointer;
-      transition:.2s ease background;border:1px solid var(--border)
-    }
-    .ios-toggle label::after{
-      content:"";position:absolute;top:50%;transform:translateY(-50%);left:4px;width:24px;height:24px;border-radius:50%;
-      background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25);transition:.2s ease left
-    }
+    .ios-toggle label{position:relative;width:56px;height:32px;background:#6b7280;border:1px solid var(--border);border-radius:999px;cursor:pointer;transition:.2s ease background}
+    .ios-toggle label::after{content:"";position:absolute;top:50%;left:4px;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25);transition:.2s ease left}
     .ios-toggle input:checked + label{background:linear-gradient(135deg,var(--primary),var(--accent))}
     .ios-toggle input:checked + label::after{left:28px}
 
-    /* Mobile tweaks */
-    @media (max-width:700px){
-      .bubble{max-width:92%}
-      .mini{grid-template-columns:1fr;gap:8px}
-      .chip{font-size:.92em}
-    }
-    @media print{
-      .composer,.mini{display:none!important}
-      .messages{height:auto}
-      .bubble{page-break-inside:avoid}
-    }
+    @media (max-width:700px){.bubble{max-width:92%}.mini{grid-template-columns:1fr;gap:8px}.chip{font-size:.92em}}
+    @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+    @media print{.composer,.mini{display:none!important}.messages{height:auto}.bubble{page-break-inside:avoid}}
   </style>
 </head>
 <body>
   <div class="app">
-    <div id="messages" class="messages"></div>
+    <div id="messages" class="messages" aria-live="polite"></div>
 
     <div class="composer">
       <div class="composer-inner">
-        <textarea id="input" rows="1" placeholder="Scrivi un messaggio e premi Invio..."></textarea>
-        <button id="send" class="btn">Invia</button>
+        <textarea id="input" rows="1" placeholder="Scrivi un messaggio e premi Invio..." autocomplete="off"></textarea>
+        <button id="send" class="btn" type="button">Invia</button>
       </div>
     </div>
 
     <div class="mini">
       <div class="mini-left">
-        <span id="netStatus" class="chip">Server: sconosciuto</span>
+        <span id="netStatus" class="chip" role="status">Server: sconosciuto</span>
         <span class="chip">Thread: <span id="threadChip">—</span></span>
       </div>
       <div class="mini-right">
-        <span class="chip">Tono</span>
+        <span class="chip" id="toneText">Tono</span>
         <div class="ios-toggle">
-          <input type="checkbox" id="toneSwitch" aria-label="Tono formale">
+          <input type="checkbox" id="toneSwitch" aria-labelledby="toneText" />
           <label for="toneSwitch"></label>
           <span id="toneLabel" class="chip">Informale</span>
         </div>
@@ -99,106 +80,163 @@
   </div>
 
   <script>
+    "use strict";
+
     // Fix 100vh su mobile
     const setVh = () => {
       const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
+      document.documentElement.style.setProperty("--vh", `${vh}px`);
     };
-    window.addEventListener('resize', setVh);
-    window.addEventListener('orientationchange', setVh);
+    window.addEventListener("resize", setVh);
+    window.addEventListener("orientationchange", setVh);
     setVh();
 
     const el = {
-      messages: document.getElementById('messages'),
-      input: document.getElementById('input'),
-      send: document.getElementById('send'),
-      netStatus: document.getElementById('netStatus'),
-      toneSwitch: document.getElementById('toneSwitch'),
-      toneLabel: document.getElementById('toneLabel'),
-      threadChip: document.getElementById('threadChip'),
+      messages: document.getElementById("messages"),
+      input: document.getElementById("input"),
+      send: document.getElementById("send"),
+      netStatus: document.getElementById("netStatus"),
+      toneSwitch: document.getElementById("toneSwitch"),
+      toneLabel: document.getElementById("toneLabel"),
+      threadChip: document.getElementById("threadChip"),
     };
 
-    let threadId = localStorage.getItem('threadId') || null;
-    const START = "Sono l’assistente di Manuel. Ho accesso ai suoi ricordi: desideri sapere qualcosa su di lui?";
-    const DEFAULT_TONE = localStorage.getItem('tone') || 'informale';
+    let threadId = localStorage.getItem("threadId") || null;
+    const DEFAULT_TONE = localStorage.getItem("tone") || "informale";
 
-    // Inizializza levetta + etichetta
-    (function initTone(){
-      const isFormale = DEFAULT_TONE === 'formale';
-      if (el.toneSwitch) el.toneSwitch.checked = isFormale;
-      if (el.toneLabel) el.toneLabel.textContent = isFormale ? 'Formale' : 'Informale';
+    // Imposta switch al primo load
+    (() => {
+      const isFormale = DEFAULT_TONE === "formale";
+      el.toneSwitch.checked = isFormale;
+      el.toneLabel.textContent = isFormale ? "Formale" : "Informale";
     })();
 
-    function getBehavior(t){
-      if(t==='formale') return 'Rispondi in italiano con tono formale e professionale. Dai del Lei. Evita emoji. Frasi complete, chiare e sintetiche. Non spiegare il funzionamento dell\\'assistente. Usa la memoria attiva di Manuel quando pertinente.';
-      return 'Rispondi in italiano con tono informale e amichevole. Dai del tu. Niente preamboli. Frasi brevi e pratiche. Emoji poche e opzionali. Usa la memoria attiva di Manuel quando pertinente.';
+    // Comportamento inviato all'Assistant ad ogni chiamata
+    function getBehavior(tone) {
+      if (tone === "formale") {
+        return [
+          "Sei Manuel, candidato a un colloquio. Parla in prima persona.",
+          "Tono formale costante, dai del Lei. Stile diretto, sincero, zero slogan.",
+          "Massimo 15 parole per risposta. Non ripetere. Non spiegare operazioni interne.",
+          "Usa solo dati realmente caricati/ricordi disponibili; non inventare.",
+          "Vietato citare nomi di file, documenti, testi, sorgenti, repository, indici, note, PDF, TXT, righe.",
+          "Adattati se deduci reparto: HR → risultati e impatto realistici; Tecnico → dettagli concreti (FEM, CFD, AI, mesh, BC, validazioni, pipeline, metriche).",
+          "Domande generiche: se hai dati, fornisci 2–3 fatti specifici (ruolo, competenze, progetti, risultati).",
+          'Se sarebbe vaga: chiedi precisione: "Vuole competenze, progetti o soft skill?".',
+          "Se mancano info sulla richiesta: usa solo il messaggio di fallback fornito."
+        ].join("\n");
+      }
+      // informale
+      return [
+        "Sei Manuel, candidato a un colloquio. Parla in prima persona.",
+        "Tono informale costante, dai del tu. Stile diretto, sincero, zero slogan.",
+        "Massimo 15 parole per risposta. Non ripetere. Non spiegare operazioni interne.",
+        "Usa solo dati realmente caricati/ricordi disponibili; non inventare.",
+        "Vietato citare nomi di file, documenti, testi, sorgenti, repository, indici, note, PDF, TXT, righe.",
+        "Adattati se deduci reparto: HR → risultati e impatto realistici; Tecnico → dettagli concreti (FEM, CFD, AI, mesh, BC, validazioni, pipeline, metriche).",
+        "Domande generiche: se hai dati, fornisci 2–3 fatti specifici (ruolo, competenze, progetti, risultati).",
+        'Se sarebbe vaga: chiedi precisione: "Vuoi competenze, progetti o soft skill?".',
+        "Se mancano info sulla richiesta: usa solo il messaggio di fallback fornito."
+      ].join("\n");
     }
 
-    document.addEventListener('change', (e) => {
-      if (e.target && e.target.id === 'toneSwitch') {
-        const mode = e.target.checked ? 'formale' : 'informale';
-        localStorage.setItem('tone', mode);
-        if (el.toneLabel) el.toneLabel.textContent = e.target.checked ? 'Formale' : 'Informale';
-      }
-    });
+    // Messaggio iniziale (rispetta tono)
+    function firstMessage(tone){
+      return tone === "formale"
+        ? "Buongiorno, sono Manuel. Cosa desidera sapere?"
+        : "Ciao, sono Manuel. Cosa vuoi sapere?";
+    }
 
+    // UI helpers
     function addBubble(text, who="bot"){
-      const b = document.createElement('div');
-      b.className = 'bubble ' + (who === 'me' ? 'me' : 'bot');
-      b.innerHTML = text.replace(/\n/g,'<br>');
+      const b = document.createElement("div");
+      b.className = "bubble " + (who === "me" ? "me" : "bot");
+      b.innerHTML = String(text).replace(/\n/g,"<br>");
       el.messages.appendChild(b);
       el.messages.scrollTop = el.messages.scrollHeight;
       return b;
     }
     function addThinking(){
-      const b = document.createElement('div');
-      b.className = 'bubble bot';
-      b.textContent = '…';
+      const b = document.createElement("div");
+      b.className = "bubble bot";
+      b.textContent = "…";
       el.messages.appendChild(b);
       el.messages.scrollTop = el.messages.scrollHeight;
       return b;
     }
     function autosize(){
-      el.input.style.height='auto';
+      el.input.style.height = "auto";
       const maxPx = Math.round(window.innerHeight * 0.33);
-      el.input.style.height=Math.min(el.input.scrollHeight, maxPx)+'px';
+      el.input.style.height = Math.min(el.input.scrollHeight, maxPx) + "px";
     }
 
-    if(!localStorage.getItem('greeted')){
-      addBubble(START,'bot');
-      localStorage.setItem('greeted','1');
+    // Greeting una sola volta
+    if (!localStorage.getItem("greeted")) {
+      const tone = el.toneSwitch.checked ? "formale" : "informale";
+      addBubble(firstMessage(tone), "bot");
+      localStorage.setItem("greeted", "1");
     }
 
-    // Ping server status
+    // Net status
     (async()=>{
-      try{const r=await fetch('/.netlify/functions/gptHandler',{method:'OPTIONS'}); el.netStatus.textContent=r.ok?'Server: online':'Server: offline';}
-      catch{el.netStatus.textContent='Server: offline'}
+      try{
+        const r=await fetch("/.netlify/functions/gptHandler",{method:"OPTIONS"});
+        el.netStatus.textContent = r.ok ? "Server: online" : "Server: offline";
+      }catch{
+        el.netStatus.textContent = "Server: offline";
+      }
     })();
 
-    el.input.addEventListener('input', autosize);
-    el.input.addEventListener('keydown',(e)=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}});
-    el.send.addEventListener('click', sendMessage);
+    // Tono persistente
+    document.addEventListener("change", (e) => {
+      if (e.target && e.target.id === "toneSwitch") {
+        const mode = e.target.checked ? "formale" : "informale";
+        localStorage.setItem("tone", mode);
+        el.toneLabel.textContent = e.target.checked ? "Formale" : "Informale";
+      }
+    });
 
+    // Input events
+    el.input.addEventListener("input", autosize);
+    el.input.addEventListener("keydown",(e)=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendMessage(); }});
+    el.send.addEventListener("click", sendMessage);
+
+    // Send
     async function sendMessage(){
       const text = el.input.value.trim();
       if(!text) return;
-      el.input.value=''; autosize();
-      addBubble(text,'me');
+
+      el.input.value = ""; autosize();
+      addBubble(text, "me");
+      el.send.disabled = true;
       const thinking = addThinking();
+
       try{
-        const tone = (el.toneSwitch && el.toneSwitch.checked) ? 'formale' : 'informale';
-        const res = await fetch('/.netlify/functions/gptHandler',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({message:text, threadId, behavior: getBehavior(tone)})
+        const tone = (document.getElementById("toneSwitch").checked) ? "formale" : "informale";
+        const res = await fetch("/.netlify/functions/gptHandler", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            threadId,
+            tone, // facoltativo per tua telemetria
+            behavior: getBehavior(tone) // *** passa sempre le additional_instructions ***
+          })
         });
         const data = await res.json();
         thinking.remove();
-        if(data?.reply) addBubble(data.reply,'bot'); else addBubble('Risposta vuota dal server.','bot');
-        if(data?.threadId && !threadId){
-          threadId = data.threadId; localStorage.setItem('threadId', threadId); el.threadChip.textContent = threadId.slice(-6);
+        if (data?.reply) addBubble(data.reply, "bot"); else addBubble("Risposta vuota dal server.", "bot");
+        if (data?.threadId && !threadId){
+          threadId = data.threadId;
+          localStorage.setItem("threadId", threadId);
+          el.threadChip.textContent = threadId.slice(-6);
         }
-      }catch(e){ thinking.remove(); addBubble('Errore di connessione al server. Controlla le variabili Netlify e riprova.','bot'); }
+      } catch (e){
+        thinking.remove();
+        addBubble("Errore di connessione al server. Controlla le variabili Netlify e riprova.", "bot");
+      } finally {
+        el.send.disabled = false;
+      }
     }
   </script>
 </body>
