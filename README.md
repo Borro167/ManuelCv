@@ -1,9 +1,16 @@
-# Manuel Assistant — Netlify (Chat pura)
+# Manuel Assistant — Chat Pura (Netlify)
 
-Interfaccia chat minimale + funzione Netlify con OpenAI Assistants API.
+- **Assistant ID** via `OPENAI_ASSISTANT_ID`
+- Switch **Formale/Informale**: ad ogni invio passa `additional_instructions` coerenti al tuo Assistant.
 
-## Variabili ambiente (Netlify → Site settings → Environment)
-- `OPENAI_API_KEY` **(obbligatoria)**
-- `OPENAI_ASSISTANT_ID` **(obbligatoria)** — ID dell’Assistant configurato su platform.openai.com
+## Variabili ambiente
+- `OPENAI_API_KEY`
+- `OPENAI_ASSISTANT_ID`
 
-## Struttura del progetto
+## Struttura
+- `public/index.html`
+- `netlify/functions/gptHandler.js`
+- `netlify.toml`
+- `package.json`
+
+Deploy su Netlify: publish `public/`, functions `netlify/functions/`.
