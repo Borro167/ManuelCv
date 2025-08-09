@@ -1,10 +1,9 @@
-<!doctype html>
+-<!doctype html>
 <html lang="it" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>Manuel Assistant · Chat</title>
-  <meta name="description" content="Chat UI minimale con Netlify Functions e OpenAI Assistants.">
+  <title>Manuel Assistant · Fullscreen</title>
   <style>
     :root{
       --bg:#0b0f1a; --surface:#11182b; --surface-2:#1a2340;
@@ -12,103 +11,141 @@
       --primary:#7ea2ff; --accent:#9c86ff;
       --border:rgba(255,255,255,.08); --shadow:0 14px 38px rgba(0,0,0,.45);
       --bubble-mine:#24305a; --bubble-theirs:#171f39;
+      --pad-inline: clamp(10px, 3vw, 24px);
     }
     [data-theme="light"]{
       --bg:#f6f8ff; --surface:#ffffff; --surface-2:#f0f3ff;
-      --text:#0b0f1a; --muted:#445;
-      --border:rgba(0,0,0,.08);
+      --text:#0b0f1a; --muted:#445; --border:rgba(0,0,0,.08);
       --bubble-mine:#e9edff; --bubble-theirs:#f5f7ff;
     }
-    *{ box-sizing:border-box }
-    html, body{ height:100%; margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial }
-    .topbar{
-      position:sticky; top:0; z-index:10; backdrop-filter: blur(8px);
-      display:flex; align-items:center; justify-content:space-between; gap:10px;
-      padding:14px 16px; border-bottom:1px solid var(--border); background: color-mix(in oklab, var(--bg) 88%, transparent);
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    body{overscroll-behavior-y: contain;}
+
+    /* App full-viewport anche su mobile (100dvh + fix iOS) */
+    .app{height:calc(var(--vh, 1vh) * 100);display:flex;flex-direction:column}
+
+    /* Area messaggi a tutta larghezza/altezza */
+    .messages{flex:1 1 auto;overflow:auto;padding:12px var(--pad-inline);display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth}
+
+    /* Bolle */
+    .bubble{padding:12px 14px;border-radius:14px;max-width:min(900px, 92vw);line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+    .me{align-self:flex-end;background:var(--bubble-mine)}
+    .bot{align-self:flex-start;background:var(--bubble-theirs)}
+
+    /* Composer fisso in fondo, con safe-area iOS */
+    .composer{display:flex;gap:10px;align-items:end;padding:12px var(--pad-inline);background:var(--surface-2);border-top:1px solid var(--border)}
+    .composer-inner{width:100%;display:flex;gap:10px}
+    textarea{flex:1;resize:none;min-height:44px;max-height:33dvh;border-radius:12px;padding:10px 12px;background:transparent;outline:none;color:var(--text);border:1px solid var(--border)}
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;background:linear-gradient(135deg,var(--primary),var(--accent));border:none;color:#fff;font-weight:700;cursor:pointer;box-shadow:var(--shadow)}
+
+    /* Status bar */
+    .mini{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;padding:10px var(--pad-inline) max(10px, env(safe-area-inset-bottom));color:var(--muted);font-size:.95em;border-top:1px solid var(--border);background:color-mix(in oklab, var(--surface) 90%, transparent)}
+    .mini-left,.mini-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .chip{opacity:.9}
+
+    /* Levetta stile iPhone */
+    .ios-toggle{display:inline-flex;align-items:center;gap:10px}
+    .ios-toggle input{position:absolute;opacity:0;width:0;height:0}
+    .ios-toggle label{
+      position:relative;width:56px;height:32px;background:#6b7280;border-radius:999px;cursor:pointer;
+      transition:.2s ease background;border:1px solid var(--border)
     }
-    .title{ font-weight:800; letter-spacing:.2px }
-    .top-actions{ display:flex; gap:8px; align-items:center }
-    .btn{
-      display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:12px;
-      background:linear-gradient(135deg, var(--primary), var(--accent)); border:none; color:white; font-weight:700; cursor:pointer;
-      box-shadow: var(--shadow);
+    .ios-toggle label::after{
+      content:"";position:absolute;top:50%;transform:translateY(-50%);left:4px;width:24px;height:24px;border-radius:50%;
+      background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25);transition:.2s ease left
     }
-    .btn.secondary{ background:transparent; color:var(--text); border:1px solid var(--border); box-shadow:none }
-    .container{ max-width:980px; margin:0 auto; padding: 12px 16px 20px }
-    .chat{ background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow: var(--shadow) }
-    .messages{ height:60dvh; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:10px; scroll-behavior:smooth; }
-    .bubble{ padding:12px 14px; border-radius:14px; max-width:80%; line-height:1.35; box-shadow: 0 8px 24px rgba(0,0,0,.25) }
-    .me{ align-self:flex-end; background:var(--bubble-mine) }
-    .bot{ align-self:flex-start; background:var(--bubble-theirs) }
-    .composer{ background:var(--surface-2); display:flex; gap:10px; align-items:end; padding:12px; border-top:1px solid var(--border) }
-    textarea{ flex:1; resize:none; min-height:44px; max-height:180px; border-radius:12px; padding:10px 12px; background:transparent; outline:none; color:var(--text); border:1px solid var(--border) }
-    .mini{ display:flex; gap:8px; align-items:center; justify-content:space-between; padding:8px 0 0 }
-    .mini .left, .mini .right{ display:flex; gap:8px; align-items:center }
-    .chip{ font-size:.9em; opacity:.8 }
+    .ios-toggle input:checked + label{background:linear-gradient(135deg,var(--primary),var(--accent))}
+    .ios-toggle input:checked + label::after{left:28px}
+
+    /* Mobile tweaks */
     @media (max-width:700px){
-      .messages{ height:62dvh }
-      .bubble{ max-width:86% }
+      .bubble{max-width:92%}
+      .mini{grid-template-columns:1fr;gap:8px}
+      .chip{font-size:.92em}
     }
     @media print{
-      .topbar, .composer, .mini{ display:none !important }
-      .container{ width:100%; margin:0; padding:0 }
-      .chat{ border:none; box-shadow:none }
-      .messages{ height:auto }
-      .bubble{ page-break-inside:avoid }
+      .composer,.mini{display:none!important}
+      .messages{height:auto}
+      .bubble{page-break-inside:avoid}
     }
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <div class="title">Manuel Assistant</div>
-    <div class="top-actions">
-      <button id="newChat" class="btn secondary">Nuova chat</button>
-      <button id="export" class="btn secondary">Esporta PDF</button>
-      <button id="theme" class="btn secondary">Tema</button>
-    </div>
-  </div>
+  <div class="app">
+    <div id="messages" class="messages"></div>
 
-  <div class="container">
-    <div class="chat">
-      <div id="messages" class="messages"></div>
-      <div class="composer">
+    <div class="composer">
+      <div class="composer-inner">
         <textarea id="input" rows="1" placeholder="Scrivi un messaggio e premi Invio..."></textarea>
         <button id="send" class="btn">Invia</button>
       </div>
-      <div class="mini">
-        <div class="left">
-          <span id="netStatus" class="chip">Server: sconosciuto</span>
-        </div>
-        <div class="right">
-          <span class="chip">Thread: <span id="threadChip">—</span></span>
+    </div>
+
+    <div class="mini">
+      <div class="mini-left">
+        <span id="netStatus" class="chip">Server: sconosciuto</span>
+        <span class="chip">Thread: <span id="threadChip">—</span></span>
+      </div>
+      <div class="mini-right">
+        <span class="chip">Tono</span>
+        <div class="ios-toggle">
+          <input type="checkbox" id="toneSwitch" aria-label="Tono formale">
+          <label for="toneSwitch"></label>
+          <span id="toneLabel" class="chip">Informale</span>
         </div>
       </div>
     </div>
   </div>
 
   <script>
+    // Fix 100vh su mobile
+    const setVh = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+    window.addEventListener('resize', setVh);
+    window.addEventListener('orientationchange', setVh);
+    setVh();
+
     const el = {
       messages: document.getElementById('messages'),
       input: document.getElementById('input'),
       send: document.getElementById('send'),
-      newChat: document.getElementById('newChat'),
-      exportPdf: document.getElementById('export'),
-      theme: document.getElementById('theme'),
       netStatus: document.getElementById('netStatus'),
+      toneSwitch: document.getElementById('toneSwitch'),
+      toneLabel: document.getElementById('toneLabel'),
       threadChip: document.getElementById('threadChip'),
     };
 
-    // State
     let threadId = localStorage.getItem('threadId') || null;
+    const START = "Sono l’assistente di Manuel. Ho accesso ai suoi ricordi: desideri sapere qualcosa su di lui?";
+    const DEFAULT_TONE = localStorage.getItem('tone') || 'informale';
 
-    // Defaults
-    const DEFAULT_START = "Sono l’assistente di Manuel. Ho accesso ai suoi ricordi: desideri sapere qualcosa su di lui?";
+    // Inizializza levetta + etichetta
+    (function initTone(){
+      const isFormale = DEFAULT_TONE === 'formale';
+      if (el.toneSwitch) el.toneSwitch.checked = isFormale;
+      if (el.toneLabel) el.toneLabel.textContent = isFormale ? 'Formale' : 'Informale';
+    })();
 
-    // UI helpers
+    function getBehavior(t){
+      if(t==='formale') return 'Rispondi in italiano con tono formale e professionale. Dai del Lei. Evita emoji. Frasi complete, chiare e sintetiche. Non spiegare il funzionamento dell\\'assistente. Usa la memoria attiva di Manuel quando pertinente.';
+      return 'Rispondi in italiano con tono informale e amichevole. Dai del tu. Niente preamboli. Frasi brevi e pratiche. Emoji poche e opzionali. Usa la memoria attiva di Manuel quando pertinente.';
+    }
+
+    document.addEventListener('change', (e) => {
+      if (e.target && e.target.id === 'toneSwitch') {
+        const mode = e.target.checked ? 'formale' : 'informale';
+        localStorage.setItem('tone', mode);
+        if (el.toneLabel) el.toneLabel.textContent = e.target.checked ? 'Formale' : 'Informale';
+      }
+    });
+
     function addBubble(text, who="bot"){
       const b = document.createElement('div');
       b.className = 'bubble ' + (who === 'me' ? 'me' : 'bot');
-      b.innerHTML = text.replace(/\n/g, '<br>');
+      b.innerHTML = text.replace(/\n/g,'<br>');
       el.messages.appendChild(b);
       el.messages.scrollTop = el.messages.scrollHeight;
       return b;
@@ -122,81 +159,46 @@
       return b;
     }
     function autosize(){
-      el.input.style.height = 'auto';
-      el.input.style.height = Math.min(el.input.scrollHeight, 180) + 'px';
+      el.input.style.height='auto';
+      const maxPx = Math.round(window.innerHeight * 0.33);
+      el.input.style.height=Math.min(el.input.scrollHeight, maxPx)+'px';
     }
 
-    // Initial greeting (fisso, senza pannelli)
-    if (!localStorage.getItem('greeted')){
-      addBubble(DEFAULT_START, "bot");
-      localStorage.setItem('greeted', '1');
+    if(!localStorage.getItem('greeted')){
+      addBubble(START,'bot');
+      localStorage.setItem('greeted','1');
     }
-
-    // Buttons
-    el.exportPdf.addEventListener('click', () => window.print());
-    el.newChat.addEventListener('click', () => {
-      el.messages.innerHTML = '';
-      localStorage.removeItem('threadId');
-      threadId = null;
-      localStorage.removeItem('greeted');
-      addBubble(DEFAULT_START, "bot");
-      el.threadChip.textContent = '—';
-    });
-    el.theme.addEventListener('click', () => {
-      const html = document.documentElement;
-      const isDark = html.getAttribute('data-theme') !== 'light';
-      html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-    });
-
-    // Autosize + key bindings
-    el.input.addEventListener('input', autosize);
-    el.input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey){
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-    el.send.addEventListener('click', sendMessage);
 
     // Ping server status
-    (async () => {
-      try{
-        const r = await fetch('/.netlify/functions/gptHandler', { method: 'OPTIONS' });
-        el.netStatus.textContent = r.ok ? 'Server: online' : 'Server: offline';
-      }catch(e){
-        el.netStatus.textContent = 'Server: offline';
-      }
+    (async()=>{
+      try{const r=await fetch('/.netlify/functions/gptHandler',{method:'OPTIONS'}); el.netStatus.textContent=r.ok?'Server: online':'Server: offline';}
+      catch{el.netStatus.textContent='Server: offline'}
     })();
 
-    // Main send
+    el.input.addEventListener('input', autosize);
+    el.input.addEventListener('keydown',(e)=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}});
+    el.send.addEventListener('click', sendMessage);
+
     async function sendMessage(){
       const text = el.input.value.trim();
-      if (!text) return;
-      el.input.value = "";
-      autosize();
-      addBubble(text, "me");
+      if(!text) return;
+      el.input.value=''; autosize();
+      addBubble(text,'me');
       const thinking = addThinking();
-
-      try {
-        const res = await fetch('/.netlify/functions/gptHandler', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text, threadId })
+      try{
+        const tone = (el.toneSwitch && el.toneSwitch.checked) ? 'formale' : 'informale';
+        const res = await fetch('/.netlify/functions/gptHandler',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({message:text, threadId, behavior: getBehavior(tone)})
         });
         const data = await res.json();
         thinking.remove();
-        if (data?.reply) addBubble(data.reply, "bot");
-        else addBubble("Risposta vuota dal server.", "bot");
-
-        if (data?.threadId && !threadId) {
-          threadId = data.threadId;
-          localStorage.setItem('threadId', threadId);
-          el.threadChip.textContent = threadId.slice(-6);
+        if(data?.reply) addBubble(data.reply,'bot'); else addBubble('Risposta vuota dal server.','bot');
+        if(data?.threadId && !threadId){
+          threadId = data.threadId; localStorage.setItem('threadId', threadId); el.threadChip.textContent = threadId.slice(-6);
         }
-      } catch (e) {
-        thinking.remove();
-        addBubble("Errore di connessione al server. Controlla che le variabili Netlify siano impostate e riprova.", "bot");
-      }
+      }catch(e){ thinking.remove(); addBubble('Errore di connessione al server. Controlla le variabili Netlify e riprova.','bot'); }
     }
   </script>
 </body>
