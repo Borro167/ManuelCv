@@ -4,209 +4,272 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <meta name="color-scheme" content="dark light" />
-  <title>Manuel Assistant · Fullscreen</title>
+  <title>Assistente di Manuel — Chat</title>
   <style>
     :root{
-      --bg:#0b0f1a; --surface:#11182b; --surface-2:#1a2340;
-      --text:#e8ecf8; --muted:#a8b0c8;
-      --primary:#7ea2ff; --accent:#9c86ff;
-      --border:rgba(255,255,255,.08); --shadow:0 14px 38px rgba(0,0,0,.45);
-      --bubble-mine:#24305a; --bubble-theirs:#171f39;
-      --pad-inline: clamp(10px, 3vw, 24px);
+      --bg: #0b0f1a;
+      --bg-grad-1: #0b0f1a;
+      --bg-grad-2: #121a2f;
+      --surface: #0f1629cc; /* glass */
+      --surface-2: #121a2fcc;
+      --card: #131c37aa;
+      --text: #e9eefc;
+      --muted: #aab3cd;
+      --primary: #86a6ff;
+      --accent: #b38bff;
+      --ok: #35d39e;
+      --warn: #ffb64d;
+      --danger: #ff6b6b;
+      --border: 1px solid rgba(255,255,255,.08);
+      --shadow: 0 10px 40px rgba(0,0,0,.55);
+      --radius: 18px;
+      --pad: clamp(12px, 2vw, 20px);
     }
     [data-theme="light"]{
-      --bg:#f6f8ff; --surface:#ffffff; --surface-2:#f0f3ff;
-      --text:#0b0f1a; --muted:#445; --border:rgba(0,0,0,.08);
-      --bubble-mine:#e9edff; --bubble-theirs:#f5f7ff;
+      --bg:#f7f8ff;--bg-grad-1:#f7f8ff;--bg-grad-2:#e9ecff;
+      --surface:#ffffffcc;--surface-2:#ffffffee;--card:#ffffffcc;
+      --text:#0b0f1a;--muted:#4a5470;--border:1px solid rgba(0,0,0,.08);
+      --shadow: 0 12px 36px rgba(0,0,0,.10);
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
-    body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;overscroll-behavior-y:contain}
+    body{
+      font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial;
+      color:var(--text);
+      background: radial-gradient(1200px 800px at 10% -10%, #23326b44, transparent),
+                  radial-gradient(1000px 600px at 100% 0%, #5b3cc744, transparent),
+                  linear-gradient(160deg, var(--bg-grad-1), var(--bg-grad-2));
+      overflow:hidden;
+    }
 
-    .app{height:calc(var(--vh,1vh)*100);display:flex;flex-direction:column}
-    .messages{flex:1 1 auto;overflow:auto;padding:12px var(--pad-inline);display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth}
-    .bubble{max-width:min(900px,92vw);padding:12px 14px;border-radius:14px;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.25)}
-    .me{align-self:flex-end;background:var(--bubble-mine)}
-    .bot{align-self:flex-start;background:var(--bubble-theirs)}
+    .wrap{height:100dvh;display:grid;grid-template-rows:auto 1fr auto;}
 
-    .composer{display:flex;gap:10px;align-items:end;padding:12px var(--pad-inline);background:var(--surface-2);border-top:1px solid var(--border)}
-    .composer-inner{width:100%;display:flex;gap:10px}
-    textarea{flex:1;resize:none;min-height:44px;max-height:33dvh;padding:10px 12px;color:var(--text);background:transparent;border:1px solid var(--border);border-radius:12px;outline:none}
-    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;color:#fff;background:linear-gradient(135deg,var(--primary),var(--accent));border:none;border-radius:12px;font-weight:700;cursor:pointer;box-shadow:var(--shadow)}
+    /* Header */
+    .header{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px var(--pad);backdrop-filter: blur(10px);background:linear-gradient(180deg, var(--surface), transparent);border-bottom:var(--border)}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));color:#0b0f1a;font-weight:900;box-shadow:var(--shadow)}
+    .title{font-weight:700;letter-spacing:.2px}
+
+    .header-right{display:flex;align-items:center;gap:16px}
+    .status{display:flex;align-items:center;gap:8px;font-size:.95em;color:var(--muted)}
+    .dot{width:10px;height:10px;border-radius:999px;background:var(--warn);box-shadow:0 0 0 2px #0002}
+
+    /* Toggle */
+    .toggle{display:flex;align-items:center;gap:10px}
+    .toggle input{position:absolute;opacity:0}
+    .toggle label{position:relative;width:60px;height:34px;border-radius:999px;background:#6b7280;display:block;cursor:pointer;border:var(--border);transition:.2s ease all}
+    .toggle label:after{content:"";position:absolute;top:50%;left:4px;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.25);transition:.2s ease left}
+    .toggle input:checked + label{background:linear-gradient(135deg,var(--primary),var(--accent))}
+    .toggle input:checked + label:after{left:30px}
+    .toggle span{font-size:.95em;color:var(--muted)}
+
+    /* Messages */
+    .chat{max-width:980px;margin:0 auto;padding:16px var(--pad);overflow:auto;scroll-behavior:smooth}
+    .msgs{display:flex;flex-direction:column;gap:12px;padding-bottom:24px}
+    .msg{max-width:min(780px, 90%);padding:12px 14px;border-radius:18px;line-height:1.45;background:var(--card);backdrop-filter: blur(6px);box-shadow:var(--shadow);border:var(--border);animation:pop .15s ease}
+    .msg.me{align-self:flex-end;background:linear-gradient(135deg,#20305f,#273a75)}
+    .msg.bot{align-self:flex-start;background:linear-gradient(135deg,#121a32,#101527)}
+    .meta{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:.82em;margin-top:6px}
+    .typing{width:54px;display:flex;gap:6px}
+    .typing i{width:8px;height:8px;border-radius:50%;background:#c9d2f5;opacity:.6;animation:bump 1s infinite}
+    .typing i:nth-child(2){animation-delay:.15s}
+    .typing i:nth-child(3){animation-delay:.3s}
+    @keyframes bump{0%{transform:translateY(0)}50%{transform:translateY(-4px)}100%{transform:translateY(0)}}
+    @keyframes pop{from{transform:translateY(4px);opacity:.0}to{transform:translateY(0);opacity:1}}
+
+    /* Composer */
+    .composer{position:sticky;bottom:0;z-index:15;padding:12px var(--pad) calc(12px + env(safe-area-inset-bottom));background:linear-gradient(0deg, var(--surface-2), transparent);backdrop-filter: blur(10px);border-top:var(--border)}
+    .row{max-width:980px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
+    textarea{flex:1;min-height:48px;max-height:33dvh;resize:none;padding:12px 14px;border-radius:16px;border:var(--border);background:rgba(255,255,255,.03);color:var(--text);outline:none}
+    .btn{height:48px;display:inline-flex;align-items:center;gap:10px;padding:0 16px;border-radius:14px;border:none;cursor:pointer;font-weight:700;color:#0b0f1a;background:linear-gradient(135deg,var(--primary),var(--accent));box-shadow:var(--shadow)}
     .btn[disabled]{opacity:.7;cursor:wait}
 
-    .mini{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px;padding:10px var(--pad-inline) max(10px,env(safe-area-inset-bottom));color:var(--muted);font-size:.95em;border-top:1px solid var(--border);background:color-mix(in oklab, var(--surface) 90%, transparent)}
-    .mini-left,.mini-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-    .chip{opacity:.9}
+    /* Toast */
+    .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#11172c;box-shadow:var(--shadow);border:var(--border);padding:10px 14px;border-radius:12px;color:var(--text);opacity:0;pointer-events:none;transition:.25s ease opacity}
+    .toast.show{opacity:1}
 
-    /* switch iPhone */
-    .ios-toggle{display:inline-flex;align-items:center;gap:10px}
-    .ios-toggle input{position:absolute;opacity:0;width:0;height:0}
-    .ios-toggle label{position:relative;width:56px;height:32px;background:#6b7280;border:1px solid var(--border);border-radius:999px;cursor:pointer;transition:.2s ease background}
-    .ios-toggle label::after{content:"";position:absolute;top:50%;left:4px;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25);transition:.2s ease left}
-    .ios-toggle input:checked + label{background:linear-gradient(135deg,var(--primary),var(--accent))}
-    .ios-toggle input:checked + label::after{left:28px}
-
-    @media (max-width:700px){.bubble{max-width:92%}.mini{grid-template-columns:1fr;gap:8px}.chip{font-size:.92em}}
+    @media (max-width:720px){.msg{max-width:92%}}
     @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
-    @media print{.composer,.mini{display:none!important}.messages{height:auto}.bubble{page-break-inside:avoid}}
   </style>
 </head>
 <body>
-  <div class="app">
-    <div id="messages" class="messages" aria-live="polite"></div>
-
-    <div class="composer">
-      <div class="composer-inner">
-        <textarea id="input" rows="1" placeholder="Scrivi un messaggio e premi Invio..." autocomplete="off"></textarea>
-        <button id="send" class="btn" type="button">Invia</button>
+  <div class="wrap">
+    <header class="header">
+      <div class="brand">
+        <div class="logo">M</div>
+        <div class="title">Assistente di Manuel</div>
       </div>
-    </div>
-
-    <div class="mini">
-      <div class="mini-left">
-        <span id="netStatus" class="chip" role="status">Server: sconosciuto</span>
-        <span class="chip">Thread: <span id="threadChip">—</span></span>
-      </div>
-      <div class="mini-right">
-        <span class="chip" id="toneText">Tono</span>
-        <div class="ios-toggle">
-          <input type="checkbox" id="toneSwitch" aria-labelledby="toneText" />
-          <label for="toneSwitch"></label>
-          <span id="toneLabel" class="chip">Informale</span>
+      <div class="header-right">
+        <div class="status" title="Stato server">
+          <span class="dot" id="netDot"></span>
+          <span id="netText">controllo…</span>
+        </div>
+        <div class="toggle">
+          <span id="toneLabel">Informale</span>
+          <input type="checkbox" id="toneSwitch" />
+          <label for="toneSwitch" aria-label="Cambia tono"></label>
         </div>
       </div>
-    </div>
+    </header>
+
+    <main class="chat" id="chat" aria-live="polite">
+      <div class="msgs" id="messages"></div>
+    </main>
+
+    <footer class="composer">
+      <div class="row">
+        <textarea id="input" placeholder="Scrivi e premi Invio… (Shift+Invio va a capo)" autocomplete="off"></textarea>
+        <button id="send" class="btn" type="button">Invia</button>
+      </div>
+    </footer>
   </div>
+
+  <div class="toast" id="toast"></div>
 
   <script>
     "use strict";
 
-    // --- viewport fix mobile
-    const setVh = () => {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty("--vh", `${vh}px`);
-    };
-    addEventListener("resize", setVh);
-    addEventListener("orientationchange", setVh);
-    setVh();
-
-    // --- DOM refs
+    // DOM
     const el = {
       messages: document.getElementById("messages"),
       input: document.getElementById("input"),
       send: document.getElementById("send"),
-      netStatus: document.getElementById("netStatus"),
       toneSwitch: document.getElementById("toneSwitch"),
       toneLabel: document.getElementById("toneLabel"),
-      threadChip: document.getElementById("threadChip"),
+      netDot: document.getElementById("netDot"),
+      netText: document.getElementById("netText"),
+      toast: document.getElementById("toast"),
     };
 
-    // --- state
+    // STATE
     let threadId = localStorage.getItem("threadId") || null;
-    let tone = localStorage.getItem("tone") || "informale"; // formale/informale
-    const history = JSON.parse(localStorage.getItem("history") || "[]"); // [{role,content}]
+    let tone = localStorage.getItem("tone") || "informale"; // informale | formale
+    const history = JSON.parse(localStorage.getItem("history") || "[]");
 
-    // --- tone init
+    // Utils
+    const nowTime = () => new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+    const showToast = (t) => { el.toast.textContent = t; el.toast.classList.add("show"); setTimeout(()=>el.toast.classList.remove("show"), 2200); };
+
+    // Tone init
     (function initTone(){
       const isFormale = tone === "formale";
       el.toneSwitch.checked = isFormale;
       el.toneLabel.textContent = isFormale ? "Formale" : "Informale";
     })();
 
-    // --- behavior (passato come additional_instructions)
-    function getBehavior(t) {
+    // Viewport
+    const setVh = () => { document.documentElement.style.setProperty("--vh", window.innerHeight * 0.01 + "px"); };
+    addEventListener("resize", setVh); addEventListener("orientationchange", setVh); setVh();
+
+    // Behavior passed as additional_instructions
+    function getBehavior(t){
       const hard = [
-        "Massimo 15 parole. Non ripetere. Non spiegare operazioni interne.",
-        "Usa solo dati realmente caricati/ricordi disponibili; non inventare.",
-        "Mai citare nomi di file o sorgenti.",
-        "Se deduci reparto: HR→risultati; Tecnico→dettagli tecnici e metriche.",
-        "Domande generiche: elenca 2–3 fatti specifici.",
-        "Se sarebbe vaga: chiedi precisione.",
-        "Se mancano info: usa messaggio di fallback."
-      ].join("\n");
-      return (t === "formale")
-        ? `Sei Manuel, candidato a un colloquio. Prima persona.\nTono formale, dia del Lei. Diretto e sincero.\n${hard}`
-        : `Sei Manuel, candidato a un colloquio. Prima persona.\nTono informale, dai del tu. Diretto e sincero.\n${hard}`;
+        "Massimo 15 parole. Niente giri di parole.",
+        "Usa solo dati disponibili; non inventare.",
+        "Non nominare file/sorgenti/righe.",
+        "Se HR → risultati; se tecnico → dettagli e metriche.",
+        "Se domanda vaga → chiedi specifica.",
+        "Se mancano info → usa risposta di fallback."
+      ].join("
+");
+      return t === "formale"
+        ? `Sei Manuel, candidato in un pre‑colloquio. Prima persona.
+Tono formale, dia del Lei. Direttissimo.
+${hard}`
+        : `Sei Manuel, candidato in un pre‑colloquio. Prima persona.
+Tono informale, dai del tu. Direttissimo.
+${hard}`;
     }
 
-    // --- intro message (mostrato e salvato come contesto)
+    // Intro message
     function introByTone(t){
       return t === "formale"
         ? "Buongiorno, sono l’assistente professionale di Manuel; lo sostituisco virtualmente per un pre‑colloquio. Mi dica cosa le serve."
         : "Ciao, sono l’assistente professionale di Manuel; lo sostituisco virtualmente per un pre‑colloquio. Dimmi cosa ti serve.";
     }
 
-    // --- history utils (per summary a ogni chiamata)
-    function truncate(s, n){ return s.length>n ? s.slice(0, n-1) + "…" : s; }
+    // History helpers
+    function truncate(s,n){ return s.length>n ? s.slice(0,n-1)+"…" : s; }
     function buildSummary(){
       const recent = history.slice(-12);
-      const parts = recent.map(h => (h.role==="user"?"U: ":"M: ") + truncate(h.content, 180));
+      const parts = recent.map(h => (h.role==="user"?"U: ":"M: ")+truncate(h.content, 180));
       return parts.join(" | ").slice(0, 1500);
     }
-    function saveHistory(){ localStorage.setItem("history", JSON.stringify(history.slice(-40))); }
+    function saveHistory(){ localStorage.setItem("history", JSON.stringify(history.slice(-50))); }
 
-    // --- UI helpers
+    // Render helpers
     function addBubble(text, who="bot"){
-      const b = document.createElement("div");
-      b.className = "bubble " + (who==="me"?"me":"bot");
-      b.innerHTML = String(text).replace(/\n/g,"<br>");
-      el.messages.appendChild(b);
-      el.messages.scrollTop = el.messages.scrollHeight;
-      return b;
+      const wrap = document.createElement("div");
+      wrap.className = `msg ${who}`;
+      wrap.innerHTML = String(text).replace(/
+/g, "<br>");
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = nowTime();
+      wrap.appendChild(meta);
+      el.messages.appendChild(wrap);
+      el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
+      return wrap;
     }
     function addThinking(){
-      const b = document.createElement("div");
-      b.className = "bubble bot";
-      b.textContent = "…";
-      el.messages.appendChild(b);
-      el.messages.scrollTop = el.messages.scrollHeight;
-      return b;
+      const wrap = document.createElement("div");
+      wrap.className = "msg bot";
+      const dots = document.createElement("div");
+      dots.className = "typing";
+      dots.innerHTML = "<i></i><i></i><i></i>";
+      wrap.appendChild(dots);
+      el.messages.appendChild(wrap);
+      el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
+      return wrap;
     }
+
     function autosize(){
       el.input.style.height = "auto";
       const maxPx = Math.round(window.innerHeight * 0.33);
       el.input.style.height = Math.min(el.input.scrollHeight, maxPx) + "px";
     }
 
-    // --- ping server (CORS/online)
+    // Ping server
     async function pingServer(){
-      try {
-        const res = await fetch('/.netlify/functions/gptHandler', { method:'OPTIONS' });
-        el.netStatus.textContent = res.ok ? 'Server: pronto' : 'Server: non raggiungibile';
-      } catch {
-        el.netStatus.textContent = 'Server: non raggiungibile';
+      try{
+        const r = await fetch('/.netlify/functions/gptHandler', {method:'OPTIONS'});
+        const ok = !!r.ok;
+        el.netDot.style.background = ok ? 'var(--ok)' : 'var(--warn)';
+        el.netText.textContent = ok ? 'online' : 'non raggiungibile';
+      }catch{
+        el.netDot.style.background = 'var(--warn)';
+        el.netText.textContent = 'non raggiungibile';
       }
     }
 
-    // --- init intro (solo se non già presente in history)
+    // Init: intro if first visit
     (function initIntro(){
-      if (!history.length) {
+      if (!history.length){
         const intro = introByTone(tone);
-        addBubble(intro, "bot");
-        history.push({ role:"assistant", content:intro });
+        addBubble(intro, 'bot');
+        history.push({role:'assistant', content:intro});
         saveHistory();
       }
+      autosize();
+      pingServer();
     })();
 
-    // --- send logic
+    // Send
     async function sendMessage(){
       const text = el.input.value.trim();
-      if (!text) return;
+      if(!text) return;
 
-      // UI
       addBubble(text, 'me');
-      history.push({ role:'user', content:text });
+      history.push({role:'user', content:text});
       saveHistory();
       el.input.value = '';
       autosize();
       el.send.disabled = true;
       const thinking = addThinking();
 
-      try {
-        const res = await fetch('/.netlify/functions/gptHandler', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+      try{
+        const res = await fetch('/.netlify/functions/gptHandler',{
+          method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
             message: text,
             threadId,
@@ -215,52 +278,46 @@
             summary: buildSummary(),
           })
         });
-
-        el.netStatus.textContent = res.ok ? 'Server: OK' : `Server: ${res.status}`;
+        el.netDot.style.background = res.ok ? 'var(--ok)' : 'var(--warn)';
+        el.netText.textContent = res.ok ? 'online' : `errore ${res.status}`;
         const data = await res.json();
         thinking.remove();
 
         if (data?.reply){
           addBubble(data.reply, 'bot');
-          history.push({ role:'assistant', content:data.reply });
+          history.push({role:'assistant', content:data.reply});
           saveHistory();
         } else {
           addBubble('Risposta vuota dal server.', 'bot');
         }
-
         if (data?.threadId && !threadId){
           threadId = data.threadId;
           localStorage.setItem('threadId', threadId);
-          el.threadChip.textContent = threadId.slice(-6);
+          showToast(`Thread creato: …${threadId.slice(-6)}`);
         }
-      } catch (e) {
+      }catch(e){
         thinking.remove();
-        addBubble('Errore di connessione al server. Controlla le variabili Netlify e riprova.', 'bot');
-      } finally {
+        addBubble('Errore di connessione. Controlla le variabili Netlify e riprova.', 'bot');
+        el.netDot.style.background = 'var(--warn)';
+        el.netText.textContent = 'non raggiungibile';
+      }finally{
         el.send.disabled = false;
       }
     }
 
-    // --- events
+    // Events
     el.send.addEventListener('click', sendMessage);
-    el.input.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); sendMessage(); }
+    el.input.addEventListener('keydown', (ev)=>{
+      if(ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); sendMessage(); }
     });
     el.input.addEventListener('input', autosize);
-    autosize();
 
-    el.toneSwitch.addEventListener('change', () => {
+    el.toneSwitch.addEventListener('change', ()=>{
       tone = el.toneSwitch.checked ? 'formale' : 'informale';
       el.toneLabel.textContent = el.toneSwitch.checked ? 'Formale' : 'Informale';
       localStorage.setItem('tone', tone);
-      addBubble(`Tono impostato su ${tone}.`, 'bot');
+      showToast(`Tono: ${tone}`);
     });
-
-    // show last 6 chars if thread already exists
-    if (threadId) { el.threadChip.textContent = threadId.slice(-6); }
-
-    // try to ping server once on load
-    pingServer();
   </script>
 </body>
 </html>
