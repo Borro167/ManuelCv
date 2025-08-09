@@ -1,10 +1,3 @@
-Hai ragione: ecco **`index.html`** completo con il **messaggio iniziale** già mostrato in chat e registrato nella **history** (così finisce nella `summary` inviata ad ogni chiamata API).
-
-> Testo iniziale:
-> - Formale: “Buongiorno, sono l’assistente professionale di Manuel. Lo sostituisco per un pre-colloquio. Cosa desidera sapere?”
-> - Informale: “Ciao, sono l’assistente professionale di Manuel. Lo sostituisco per un pre-colloquio. Cosa vuoi sapere?”
-
-```html
 <!doctype html>
 <html lang="it" data-theme="dark">
 <head>
@@ -111,28 +104,28 @@ Hai ragione: ecco **`index.html`** completo con il **messaggio iniziale** già m
 
     // --- state
     let threadId = localStorage.getItem("threadId") || null;
-    const DEFAULT_TONE = localStorage.getItem("tone") || "informale";
+    let tone = localStorage.getItem("tone") || "informale"; // formale/informale
     const history = JSON.parse(localStorage.getItem("history") || "[]"); // [{role,content}]
 
     // --- tone init
-    (() => {
-      const isFormale = DEFAULT_TONE === "formale";
+    (function initTone(){
+      const isFormale = tone === "formale";
       el.toneSwitch.checked = isFormale;
       el.toneLabel.textContent = isFormale ? "Formale" : "Informale";
     })();
 
     // --- behavior (passato come additional_instructions)
-    function getBehavior(tone) {
+    function getBehavior(t) {
       const hard = [
         "Massimo 15 parole. Non ripetere. Non spiegare operazioni interne.",
         "Usa solo dati realmente caricati/ricordi disponibili; non inventare.",
-        "Mai citare nomi di file, documenti, testi, sorgenti, repository, indici, note, PDF, TXT, righe.",
-        "Se deduci reparto: HR→risultati/ impatto realistici; Tecnico→dettagli (FEM, CFD, AI, mesh, BC, validazioni, pipeline, metriche).",
-        "Domande generiche: se hai dati, elenca 2–3 fatti specifici (ruolo, competenze, progetti, risultati).",
-        "Se sarebbe vaga: chiedi precisione (“Vuole/ Vuoi competenze, progetti o soft skill?”).",
-        "Se mancano info sulla richiesta: usa il messaggio di fallback."
+        "Mai citare nomi di file o sorgenti.",
+        "Se deduci reparto: HR→risultati; Tecnico→dettagli tecnici e metriche.",
+        "Domande generiche: elenca 2–3 fatti specifici.",
+        "Se sarebbe vaga: chiedi precisione.",
+        "Se mancano info: usa messaggio di fallback."
       ].join("\n");
-      return (tone === "formale")
+      return (t === "formale")
         ? `Sei Manuel, candidato a un colloquio. Prima persona.\nTono formale, dia del Lei. Diretto e sincero.\n${hard}`
         : `Sei Manuel, candidato a un colloquio. Prima persona.\nTono informale, dai del tu. Diretto e sincero.\n${hard}`;
     }
@@ -176,40 +169,98 @@ Hai ragione: ecco **`index.html`** completo con il **messaggio iniziale** già m
       el.input.style.height = Math.min(el.input.scrollHeight, maxPx) + "px";
     }
 
-    // --- messaggio iniziale sempre in chat (e in history)
+    // --- ping server (CORS/online)
+    async function pingServer(){
+      try {
+        const res = await fetch('/.netlify/functions/gptHandler', { method:'OPTIONS' });
+        el.netStatus.textContent = res.ok ? 'Server: pronto' : 'Server: non raggiungibile';
+      } catch {
+        el.netStatus.textContent = 'Server: non raggiungibile';
+      }
+    }
+
+    // --- init intro (solo se non già presente in history)
     (function initIntro(){
-      const tone = el.toneSwitch.checked ? "formale" : "informale";
-      const intro = introByTone(tone);
-      addBubble(intro, "bot");
-      history.push({ role:"assistant", content:intro });
+      if (!history.length) {
+        const intro = introByTone(tone);
+        addBubble(intro, "bot");
+        history.push({ role:"assistant", content:intro });
+        saveHistory();
+      }
+    })();
+
+    // --- send logic
+    async function sendMessage(){
+      const text = el.input.value.trim();
+      if (!text) return;
+
+      // UI
+      addBubble(text, 'me');
+      history.push({ role:'user', content:text });
       saveHistory();
-    })(););
+      el.input.value = '';
+      autosize();
+      el.send.disabled = true;
+      const thinking = addThinking();
+
+      try {
+        const res = await fetch('/.netlify/functions/gptHandler', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: text,
+            threadId,
+            behavior: getBehavior(tone),
+            tone,
+            summary: buildSummary(),
+          })
+        });
+
+        el.netStatus.textContent = res.ok ? 'Server: OK' : `Server: ${res.status}`;
         const data = await res.json();
         thinking.remove();
 
         if (data?.reply){
-          addBubble(data.reply, "bot");
-          history.push({ role:"assistant", content:data.reply });
+          addBubble(data.reply, 'bot');
+          history.push({ role:'assistant', content:data.reply });
           saveHistory();
         } else {
-          addBubble("Risposta vuota dal server.", "bot");
+          addBubble('Risposta vuota dal server.', 'bot');
         }
 
         if (data?.threadId && !threadId){
           threadId = data.threadId;
-          localStorage.setItem("threadId", threadId);
+          localStorage.setItem('threadId', threadId);
           el.threadChip.textContent = threadId.slice(-6);
         }
-      } catch {
+      } catch (e) {
         thinking.remove();
-        addBubble("Errore di connessione al server. Controlla le variabili Netlify e riprova.", "bot");
+        addBubble('Errore di connessione al server. Controlla le variabili Netlify e riprova.', 'bot');
       } finally {
         el.send.disabled = false;
       }
     }
+
+    // --- events
+    el.send.addEventListener('click', sendMessage);
+    el.input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); sendMessage(); }
+    });
+    el.input.addEventListener('input', autosize);
+    autosize();
+
+    el.toneSwitch.addEventListener('change', () => {
+      tone = el.toneSwitch.checked ? 'formale' : 'informale';
+      el.toneLabel.textContent = el.toneSwitch.checked ? 'Formale' : 'Informale';
+      localStorage.setItem('tone', tone);
+      addBubble(`Tono impostato su ${tone}.`, 'bot');
+    });
+
+    // show last 6 chars if thread already exists
+    if (threadId) { el.threadChip.textContent = threadId.slice(-6); }
+
+    // try to ping server once on load
+    pingServer();
   </script>
 </body>
 </html>
-```
-
-Vuoi che lo metta anche nel canvas per copiarlo al volo?
