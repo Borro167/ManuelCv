@@ -2,170 +2,89 @@
 <html lang="it" data-theme="dark">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Manuel Assistant · Chat Ultra</title>
-  <meta name="description" content="Chat UI veloce, tema matematico, con Netlify Functions e OpenAI Assistants.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Manuel Assistant · Chat</title>
+  <meta name="description" content="Chat UI minimale con Netlify Functions e OpenAI Assistants.">
   <style>
     :root{
       --bg:#0b0f1a; --surface:#11182b; --surface-2:#1a2340;
       --text:#e8ecf8; --muted:#a8b0c8;
-      --primary:#7ea2ff; --accent:#9c86ff; --success:#67e5a1; --danger:#ff7b7b; --warn:#ffd36a;
+      --primary:#7ea2ff; --accent:#9c86ff;
       --border:rgba(255,255,255,.08); --shadow:0 14px 38px rgba(0,0,0,.45);
       --bubble-mine:#24305a; --bubble-theirs:#171f39;
-      --math-fg:rgba(255,255,255,.06);
     }
     [data-theme="light"]{
-      --bg:#f3f5fb; --surface:#ffffff; --surface-2:#eef1fb;
-      --text:#0d1b2a; --muted:#55607a;
-      --primary:#2f5dff; --accent:#6a4dff; --success:#15a86b; --danger:#e44141; --warn:#b98500;
-      --border:rgba(0,0,0,.08); --shadow:0 12px 28px rgba(0,0,0,.12);
-      --bubble-mine:#e8edff; --bubble-theirs:#f1f3fb;
-      --math-fg:rgba(0,0,0,.04);
+      --bg:#f6f8ff; --surface:#ffffff; --surface-2:#f0f3ff;
+      --text:#0b0f1a; --muted:#445;
+      --border:rgba(0,0,0,.08);
+      --bubble-mine:#e9edff; --bubble-theirs:#f5f7ff;
     }
-    *{box-sizing:border-box}
-    html,body{margin:0;padding:0;height:100%}
-    body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,Arial;
-      background: radial-gradient(1200px 600px at 70% -10%, rgba(88,88,255,.15), transparent 60%),
-                  radial-gradient(1000px 600px at -10% 110%, rgba(156,134,255,.18), transparent 60%),
-                  var(--bg);
-      color:var(--text);
-    }
-
-    /* Topbar */
+    *{ box-sizing:border-box }
+    html, body{ height:100%; margin:0; background:var(--bg); color:var(--text); font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial }
     .topbar{
-      position:sticky; top:0; z-index:10;
-      backdrop-filter:saturate(1.2) blur(10px);
-      background: linear-gradient(180deg, rgba(0,0,0,.25), rgba(0,0,0,0)) , var(--surface);
-      border-bottom:1px solid var(--border);
-      display:flex; align-items:center; justify-content:space-between;
-      padding:10px 14px;
+      position:sticky; top:0; z-index:10; backdrop-filter: blur(8px);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding:14px 16px; border-bottom:1px solid var(--border); background: color-mix(in oklab, var(--bg) 88%, transparent);
     }
-    .brand{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.2px}
-    .logo{
-      width:28px; height:28px; display:grid; place-items:center; border-radius:8px;
-      background: conic-gradient(from 210deg, var(--primary), var(--accent), var(--primary));
-      color:white; font-weight:900; box-shadow:0 6px 18px rgba(0,0,0,.35);
-    }
-    .actions{display:flex; gap:8px; align-items:center}
+    .title{ font-weight:800; letter-spacing:.2px }
+    .top-actions{ display:flex; gap:8px; align-items:center }
     .btn{
-      appearance:none; border:1px solid var(--border); background:var(--surface-2); color:var(--text);
-      padding:8px 12px; border-radius:12px; cursor:pointer; font-weight:600;
-      transition:.18s transform ease, .18s background ease, .18s border-color ease;
+      display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:12px;
+      background:linear-gradient(135deg, var(--primary), var(--accent)); border:none; color:white; font-weight:700; cursor:pointer;
       box-shadow: var(--shadow);
     }
-    .btn:hover{transform:translateY(-1px)}
-    .btn.primary{ background:linear-gradient(135deg, var(--primary), var(--accent)); border-color:transparent; color:white }
-    .btn.icon{ display:grid; grid-auto-flow:column; align-items:center; gap:8px }
-    .btn.small{ padding:6px 10px; font-weight:600 }
-
-    .container{
-      width:min(1100px,92vw); margin:18px auto; padding:0 10px 18px;
-      display:grid; grid-template-rows:auto 1fr auto; gap:14px; min-height:calc(100dvh - 18px - 18px);
-    }
-
-    /* Mathematical background in chat area */
-    .chat{
-      position:relative; background:linear-gradient(180deg, rgba(255,255,255,.03), transparent),
-                              var(--surface);
-      border:1px solid var(--border); border-radius:20px; min-height:60dvh; overflow:hidden;
-      box-shadow: var(--shadow);
-    }
-    .math-layer{
-      pointer-events:none; position:absolute; inset:0; opacity:.5;
-      background:
-        radial-gradient(circle at 15% 25%, var(--math-fg) 0 2px, transparent 3px),
-        radial-gradient(circle at 35% 55%, var(--math-fg) 0 2px, transparent 3px),
-        radial-gradient(circle at 70% 35%, var(--math-fg) 0 2px, transparent 3px);
-      mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
-    }
-    .messages{ position:relative; height:60dvh; overflow:auto; padding:18px; display:flex; flex-direction:column; gap:10px }
-    .bubble{
-      max-width:72%; padding:12px 14px; border-radius:18px; line-height:1.5; border:1px solid var(--border);
-      box-shadow:0 6px 18px rgba(0,0,0,.18);
-    }
-    .bubble.user{ align-self:flex-end; background:var(--bubble-mine) }
-    .bubble.bot{ align-self:flex-start; background:var(--bubble-theirs) }
-    .bubble small{ display:block; opacity:.6; margin-top:6px; font-size:.8em }
-
-    /* Thinking indicator - ∂risposta/∂t */
-    .thinking{ align-self:flex-start; display:flex; gap:8px; align-items:center; color:var(--muted) }
-    .dt{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .pulse{ width:8px; height:8px; border-radius:10px; background:var(--primary); animation:bl 1s linear infinite }
-    @keyframes bl{ 50%{ transform:scale(.5); opacity:.6 } }
-
-    /* Composer */
-    .composer{
-      display:grid; grid-template-columns:1fr auto; gap:10px; align-items:end;
-      background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:10px; box-shadow:var(--shadow);
-    }
-    textarea{
-      resize:none; border:none; outline:none; background:transparent; color:var(--text); font-size:1rem; line-height:1.5;
-      max-height:28dvh; min-height:44px; padding:10px;
-    }
-    .send{
-      display:grid; grid-auto-flow:column; align-items:center; gap:8px;
-      padding:10px 14px; border:none; cursor:pointer; border-radius:14px; color:white; font-weight:700;
-      background:linear-gradient(135deg, var(--primary), var(--accent)); box-shadow: var(--shadow);
-    }
-    .send .grad{ font-size:18px; font-weight:900 } /* ∇ */
-
-    /* Footer mini controls */
-    .mini{ display:flex; gap:8px; align-items:center; justify-content:space-between; margin-top:6px }
+    .btn.secondary{ background:transparent; color:var(--text); border:1px solid var(--border); box-shadow:none }
+    .container{ max-width:980px; margin:0 auto; padding: 12px 16px 20px }
+    .chat{ background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow: var(--shadow) }
+    .messages{ height:60dvh; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:10px; scroll-behavior:smooth; }
+    .bubble{ padding:12px 14px; border-radius:14px; max-width:80%; line-height:1.35; box-shadow: 0 8px 24px rgba(0,0,0,.25) }
+    .me{ align-self:flex-end; background:var(--bubble-mine) }
+    .bot{ align-self:flex-start; background:var(--bubble-theirs) }
+    .composer{ background:var(--surface-2); display:flex; gap:10px; align-items:end; padding:12px; border-top:1px solid var(--border) }
+    textarea{ flex:1; resize:none; min-height:44px; max-height:180px; border-radius:12px; padding:10px 12px; background:transparent; outline:none; color:var(--text); border:1px solid var(--border) }
+    .mini{ display:flex; gap:8px; align-items:center; justify-content:space-between; padding:8px 0 0 }
     .mini .left, .mini .right{ display:flex; gap:8px; align-items:center }
-    .mini label{ font-size:.9em; opacity:.8 }
-
-    /* Print (export PDF) */
+    .chip{ font-size:.9em; opacity:.8 }
+    @media (max-width:700px){
+      .messages{ height:62dvh }
+      .bubble{ max-width:86% }
+    }
     @media print{
-      body{ background:white }
-      .topbar, .mini, .composer { display:none !important }
+      .topbar, .composer, .mini{ display:none !important }
       .container{ width:100%; margin:0; padding:0 }
       .chat{ border:none; box-shadow:none }
       .messages{ height:auto }
       .bubble{ page-break-inside:avoid }
     }
-
-    @media (max-width:700px){
-      .bubble{ max-width:86% }
-      .messages{ height:62dvh }
-    }
   </style>
 </head>
 <body>
   <div class="topbar">
-    <div class="brand">
-      <div class="logo">∇</div>
-      <div>Manuel Assistant</div>
-    </div>
-    <div class="actions">
-      <button id="newChat" class="btn">Nuova chat</button>
-      <button id="exportPdf" class="btn">Esporta PDF</button>
-      <button id="theme" class="btn small">Tema</button>
+    <div class="title">Manuel Assistant</div>
+    <div class="top-actions">
+      <button id="newChat" class="btn secondary">Nuova chat</button>
+      <button id="export" class="btn secondary">Esporta PDF</button>
+      <button id="theme" class="btn secondary">Tema</button>
     </div>
   </div>
 
-  <main class="container">
-    <section class="chat">
-      <div class="math-layer"></div>
+  <div class="container">
+    <div class="chat">
       <div id="messages" class="messages"></div>
-    </section>
-
-    <section>
       <div class="composer">
-        <textarea id="input" placeholder="Scrivi un messaggio… (Invio = invia, Shift+Invio = a capo)"></textarea>
-        <button id="send" class="send"><span class="grad">∇</span> Invia</button>
+        <textarea id="input" rows="1" placeholder="Scrivi un messaggio e premi Invio..."></textarea>
+        <button id="send" class="btn">Invia</button>
       </div>
       <div class="mini">
         <div class="left">
-          <input type="file" id="audioFile" accept="audio/*" style="display:none">
-          <button id="pickAudio" class="btn small icon">🎵 <span>Scegli musica di sottofondo</span></button>
-          <label><input type="checkbox" id="musicToggle"> Musica ON/OFF</label>
+          <span id="netStatus" class="chip">Server: sconosciuto</span>
         </div>
         <div class="right">
-          <span id="netStatus" style="opacity:.8"></span>
+          <span class="chip">Thread: <span id="threadChip">—</span></span>
         </div>
       </div>
-    </section>
-  </main>
+    </div>
+  </div>
 
   <script>
     const el = {
@@ -173,112 +92,90 @@
       input: document.getElementById('input'),
       send: document.getElementById('send'),
       newChat: document.getElementById('newChat'),
-      exportPdf: document.getElementById('exportPdf'),
+      exportPdf: document.getElementById('export'),
       theme: document.getElementById('theme'),
       netStatus: document.getElementById('netStatus'),
-      pickAudio: document.getElementById('pickAudio'),
-      audioFile: document.getElementById('audioFile'),
-      musicToggle: document.getElementById('musicToggle'),
+      threadChip: document.getElementById('threadChip'),
     };
 
     // State
     let threadId = localStorage.getItem('threadId') || null;
-    let playing = false;
-    let bgAudio = null;
 
-    // Welcome (contestualizzato, non invasivo)
-    addBubble("Ciao! Sono l'assistente di Manuel. Rispondo in modo diretto e senza inventare nulla. Scrivi pure ✍️", "bot");
+    // Defaults
+    const DEFAULT_START = "Sono l’assistente di Manuel. Ho accesso ai suoi ricordi: desideri sapere qualcosa su di lui?";
 
-    // Network status
-    function setNetStatus(){
-      el.netStatus.textContent = navigator.onLine ? "Online" : "Offline";
-      el.netStatus.style.color = navigator.onLine ? "var(--success)" : "var(--danger)";
+    // UI helpers
+    function addBubble(text, who="bot"){
+      const b = document.createElement('div');
+      b.className = 'bubble ' + (who === 'me' ? 'me' : 'bot');
+      b.innerHTML = text.replace(/\n/g, '<br>');
+      el.messages.appendChild(b);
+      el.messages.scrollTop = el.messages.scrollHeight;
+      return b;
     }
-    window.addEventListener('online', setNetStatus);
-    window.addEventListener('offline', setNetStatus);
-    setNetStatus();
-
-    // Theme toggle
-    el.theme.addEventListener('click', () => {
-      const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-      document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
-    });
-
-    // New chat
-    el.newChat.addEventListener('click', () => {
-      threadId = null;
-      localStorage.removeItem('threadId');
-      el.messages.innerHTML = "";
-      addBubble("Nuova conversazione avviata. Dimmi pure.", "bot");
-    });
-
-    // Export PDF (stampa solo chat)
-    el.exportPdf.addEventListener('click', () => window.print());
-
-    // Audio background
-    el.pickAudio.addEventListener('click', () => el.audioFile.click());
-    el.audioFile.addEventListener('change', () => {
-      const file = el.audioFile.files?.[0];
-      if (!file) return;
-      if (bgAudio) { bgAudio.pause(); bgAudio = null; }
-      const url = URL.createObjectURL(file);
-      bgAudio = new Audio(url);
-      bgAudio.loop = true;
-      if (el.musicToggle.checked) {
-        bgAudio.play().catch(()=>{});
-      }
-    });
-    el.musicToggle.addEventListener('change', () => {
-      if (!bgAudio) return;
-      if (el.musicToggle.checked) bgAudio.play().catch(()=>{});
-      else bgAudio.pause();
-    });
-
-    // Autosize textarea + key bindings
-    el.input.addEventListener('input', autosize);
+    function addThinking(){
+      const b = document.createElement('div');
+      b.className = 'bubble bot';
+      b.textContent = '…';
+      el.messages.appendChild(b);
+      el.messages.scrollTop = el.messages.scrollHeight;
+      return b;
+    }
     function autosize(){
       el.input.style.height = 'auto';
-      el.input.style.height = Math.min(el.input.scrollHeight, window.innerHeight * 0.28) + 'px';
+      el.input.style.height = Math.min(el.input.scrollHeight, 180) + 'px';
     }
+
+    // Initial greeting (fisso, senza pannelli)
+    if (!localStorage.getItem('greeted')){
+      addBubble(DEFAULT_START, "bot");
+      localStorage.setItem('greeted', '1');
+    }
+
+    // Buttons
+    el.exportPdf.addEventListener('click', () => window.print());
+    el.newChat.addEventListener('click', () => {
+      el.messages.innerHTML = '';
+      localStorage.removeItem('threadId');
+      threadId = null;
+      localStorage.removeItem('greeted');
+      addBubble(DEFAULT_START, "bot");
+      el.threadChip.textContent = '—';
+    });
+    el.theme.addEventListener('click', () => {
+      const html = document.documentElement;
+      const isDark = html.getAttribute('data-theme') !== 'light';
+      html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    });
+
+    // Autosize + key bindings
+    el.input.addEventListener('input', autosize);
     el.input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter' && !e.shiftKey){
         e.preventDefault();
         sendMessage();
       }
     });
-
     el.send.addEventListener('click', sendMessage);
 
-    function addBubble(text, who="bot"){
-      const wrapper = document.createElement('div');
-      wrapper.className = `bubble ${who}`;
-      wrapper.innerHTML = text.replace(/\n/g, "<br>");
-      el.messages.appendChild(wrapper);
-      el.messages.scrollTop = el.messages.scrollHeight;
-      return wrapper;
-    }
+    // Ping server status
+    (async () => {
+      try{
+        const r = await fetch('/.netlify/functions/gptHandler', { method: 'OPTIONS' });
+        el.netStatus.textContent = r.ok ? 'Server: online' : 'Server: offline';
+      }catch(e){
+        el.netStatus.textContent = 'Server: offline';
+      }
+    })();
 
-    function addThinking(){
-      const row = document.createElement('div');
-      row.className = 'thinking';
-      row.innerHTML = '<span class="pulse"></span><span class="dt">∂risposta/∂t</span>';
-      el.messages.appendChild(row);
-      el.messages.scrollTop = el.messages.scrollHeight;
-      return row;
-    }
-
+    // Main send
     async function sendMessage(){
       const text = el.input.value.trim();
       if (!text) return;
-      addBubble(text, "user");
       el.input.value = "";
       autosize();
+      addBubble(text, "me");
       const thinking = addThinking();
-
-      // Avvia musica alla prima interazione (per conformità ai browser)
-      if (bgAudio && el.musicToggle.checked && !playing) {
-        bgAudio.play().then(()=> playing = true).catch(()=>{});
-      }
 
       try {
         const res = await fetch('/.netlify/functions/gptHandler', {
@@ -294,6 +191,7 @@
         if (data?.threadId && !threadId) {
           threadId = data.threadId;
           localStorage.setItem('threadId', threadId);
+          el.threadChip.textContent = threadId.slice(-6);
         }
       } catch (e) {
         thinking.remove();
