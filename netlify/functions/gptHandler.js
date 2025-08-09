@@ -1,9 +1,10 @@
 import { OpenAI } from "openai";
 
-// Netlify Function: inoltra i messaggi all'Assistant
-// - Usa OPENAI_ASSISTANT_ID per ogni run
-// - Riceve `behavior` dal client e lo passa come additional_instructions
-// - Gestisce thread persistente, CORS e timeout
+// Funzione Netlify: inoltra ai Assistants
+// - Assistant ID da OPENAI_ASSISTANT_ID
+// - Usa `behavior` come additional_instructions
+// - Pre-inietta `[SINTESI CONVERSAZIONE]` se ricevuta da client
+// - Thread persistente, CORS, timeout
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -32,33 +33,43 @@ export async function handler(event) {
     const body = JSON.parse(event.body || "{}");
     const userText = (body.message || "").toString().trim();
     let threadId = (body.threadId || "").toString() || null;
-    const behavior = (body.behavior || "").toString();   // <- arriva dal toggle formale/informale
-    const tone = (body.tone || "").toString();          // <- opzionale, utile se vuoi loggare lato server
+
+    const behavior = (body.behavior || "").toString();  // istruzioni runtime (tono)
+    const tone = (body.tone || "").toString();          // opzionale (telemetria)
+    const summary = (body.summary || "").toString();    // sintesi chat dal client
 
     if (!userText) {
       return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "message vuoto" }) };
     }
 
-    // 1) Crea thread se assente
+    // 1) Thread
     if (!threadId) {
       const thread = await openai.beta.threads.create();
       threadId = thread.id;
     }
 
-    // 2) Messaggio utente
+    // 2) Inietta sintesi come messaggio utente (contestualizzazione leggera, mai file/fonte)
+    if (summary) {
+      await openai.beta.threads.messages.create(threadId, {
+        role: "user",
+        content: `[SINTESI CONVERSAZIONE]: ${summary}`
+      });
+    }
+
+    // 3) Messaggio utente
     await openai.beta.threads.messages.create(threadId, {
       role: "user",
       content: userText,
       metadata: tone ? { tone } : undefined
     });
 
-    // 3) Run con Assistant + istruzioni runtime
+    // 4) Run
     let run = await openai.beta.threads.runs.create(threadId, {
       assistant_id: process.env.OPENAI_ASSISTANT_ID,
       additional_instructions: behavior || undefined
     });
 
-    // 4) Poll fino a 55s
+    // 5) Poll fino a 55s
     const start = Date.now();
     const timeoutMs = 55000;
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -69,7 +80,7 @@ export async function handler(event) {
       run = await openai.beta.threads.runs.retrieve(threadId, run.id);
     }
 
-    // 5) Estrai risposta
+    // 6) Estrai risposta
     const list = await openai.beta.threads.messages.list(threadId, { limit: 10, order: "desc" });
     const assistantMsg = list.data.find(m => m.role === "assistant");
     const reply =
