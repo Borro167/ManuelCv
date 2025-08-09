@@ -82,7 +82,7 @@
   <script>
     "use strict";
 
-    // Fix 100vh su mobile
+    // -------- viewport fix mobile
     const setVh = () => {
       const vh = window.innerHeight * 0.01;
       document.documentElement.style.setProperty("--vh", `${vh}px`);
@@ -91,6 +91,7 @@
     window.addEventListener("orientationchange", setVh);
     setVh();
 
+    // -------- DOM refs
     const el = {
       messages: document.getElementById("messages"),
       input: document.getElementById("input"),
@@ -101,53 +102,61 @@
       threadChip: document.getElementById("threadChip"),
     };
 
+    // -------- state
     let threadId = localStorage.getItem("threadId") || null;
     const DEFAULT_TONE = localStorage.getItem("tone") || "informale";
+    const history = JSON.parse(localStorage.getItem("history") || "[]"); // {role:'user'|'assistant', content:'...'}
 
-    // Imposta switch al primo load
+    // -------- tone init
     (() => {
       const isFormale = DEFAULT_TONE === "formale";
       el.toneSwitch.checked = isFormale;
       el.toneLabel.textContent = isFormale ? "Formale" : "Informale";
     })();
 
-    // Comportamento inviato all'Assistant ad ogni chiamata
+    // -------- behavior builder (passato come additional_instructions)
     function getBehavior(tone) {
-      if (tone === "formale") {
-        return [
-          "Sei Manuel, candidato a un colloquio. Parla in prima persona.",
-          "Tono formale costante, dai del Lei. Stile diretto, sincero, zero slogan.",
-          "Massimo 15 parole per risposta. Non ripetere. Non spiegare operazioni interne.",
-          "Usa solo dati realmente caricati/ricordi disponibili; non inventare.",
-          "Vietato citare nomi di file, documenti, testi, sorgenti, repository, indici, note, PDF, TXT, righe.",
-          "Adattati se deduci reparto: HR → risultati e impatto realistici; Tecnico → dettagli concreti (FEM, CFD, AI, mesh, BC, validazioni, pipeline, metriche).",
-          "Domande generiche: se hai dati, fornisci 2–3 fatti specifici (ruolo, competenze, progetti, risultati).",
-          'Se sarebbe vaga: chiedi precisione: "Vuole competenze, progetti o soft skill?".',
-          "Se mancano info sulla richiesta: usa solo il messaggio di fallback fornito."
-        ].join("\n");
-      }
-      // informale
-      return [
-        "Sei Manuel, candidato a un colloquio. Parla in prima persona.",
-        "Tono informale costante, dai del tu. Stile diretto, sincero, zero slogan.",
-        "Massimo 15 parole per risposta. Non ripetere. Non spiegare operazioni interne.",
+      const hardRules = [
+        "Massimo 15 parole. Non ripetere. Non spiegare operazioni interne.",
         "Usa solo dati realmente caricati/ricordi disponibili; non inventare.",
         "Vietato citare nomi di file, documenti, testi, sorgenti, repository, indici, note, PDF, TXT, righe.",
-        "Adattati se deduci reparto: HR → risultati e impatto realistici; Tecnico → dettagli concreti (FEM, CFD, AI, mesh, BC, validazioni, pipeline, metriche).",
+        "Se deduci reparto: HR→risultati/ impatto realistici; Tecnico→dettagli concreti (FEM, CFD, AI, mesh, BC, validazioni, pipeline, metriche).",
         "Domande generiche: se hai dati, fornisci 2–3 fatti specifici (ruolo, competenze, progetti, risultati).",
-        'Se sarebbe vaga: chiedi precisione: "Vuoi competenze, progetti o soft skill?".',
+        "Se risposta vaga: chiedi precisione (“Vuole/ Vuoi competenze, progetti o soft skill?”).",
         "Se mancano info sulla richiesta: usa solo il messaggio di fallback fornito."
       ].join("\n");
+
+      if (tone === "formale") {
+        return `Sei Manuel, candidato a un colloquio. Parla in prima persona.
+Tono formale costante, dia del Lei. Stile diretto, sincero, zero slogan.
+${hardRules}`;
+      }
+      return `Sei Manuel, candidato a un colloquio. Parla in prima persona.
+Tono informale costante, dai del tu. Stile diretto, sincero, zero slogan.
+${hardRules}`;
     }
 
-    // Messaggio iniziale (rispetta tono)
-    function firstMessage(tone){
+    // -------- intro message (contestualizzato come pre-colloquio)
+    function introByTone(tone){
       return tone === "formale"
-        ? "Buongiorno, sono Manuel. Cosa desidera sapere?"
-        : "Ciao, sono Manuel. Cosa vuoi sapere?";
+        ? "Buongiorno, sono l’assistente professionale di Manuel. Lo sostituisco per un pre-colloquio. Cosa desidera sapere?"
+        : "Ciao, sono l’assistente professionale di Manuel. Lo sostituisco per un pre-colloquio. Cosa vuoi sapere?";
     }
 
-    // UI helpers
+    // -------- history utils (per sintesi da inviare al server)
+    function truncate(s, n){ return s.length>n ? s.slice(0, n-1) + "…" : s; }
+    function buildSummary(){
+      // comprimi ultimi turni (max ~1500 caratteri)
+      const recent = history.slice(-12);
+      const parts = recent.map(h => (h.role === "user" ? "U: " : "M: ") + truncate(h.content, 180));
+      const summary = parts.join(" | ");
+      return summary.slice(0, 1500);
+    }
+    function saveHistory(){
+      localStorage.setItem("history", JSON.stringify(history.slice(-40)));
+    }
+
+    // -------- UI helpers
     function addBubble(text, who="bot"){
       const b = document.createElement("div");
       b.className = "bubble " + (who === "me" ? "me" : "bot");
@@ -170,14 +179,17 @@
       el.input.style.height = Math.min(el.input.scrollHeight, maxPx) + "px";
     }
 
-    // Greeting una sola volta
+    // -------- greeting una sola volta (e salva in history)
     if (!localStorage.getItem("greeted")) {
       const tone = el.toneSwitch.checked ? "formale" : "informale";
-      addBubble(firstMessage(tone), "bot");
+      const intro = introByTone(tone);
+      addBubble(intro, "bot");
+      history.push({ role:"assistant", content:intro });
+      saveHistory();
       localStorage.setItem("greeted", "1");
     }
 
-    // Net status
+    // -------- net status ping
     (async()=>{
       try{
         const r=await fetch("/.netlify/functions/gptHandler",{method:"OPTIONS"});
@@ -187,7 +199,7 @@
       }
     })();
 
-    // Tono persistente
+    // -------- tono persistente
     document.addEventListener("change", (e) => {
       if (e.target && e.target.id === "toneSwitch") {
         const mode = e.target.checked ? "formale" : "informale";
@@ -196,18 +208,21 @@
       }
     });
 
-    // Input events
+    // -------- input
     el.input.addEventListener("input", autosize);
     el.input.addEventListener("keydown",(e)=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendMessage(); }});
     el.send.addEventListener("click", sendMessage);
 
-    // Send
+    // -------- send
     async function sendMessage(){
       const text = el.input.value.trim();
       if(!text) return;
 
       el.input.value = ""; autosize();
       addBubble(text, "me");
+      history.push({ role:"user", content:text });
+      saveHistory();
+
       el.send.disabled = true;
       const thinking = addThinking();
 
@@ -219,13 +234,22 @@
           body: JSON.stringify({
             message: text,
             threadId,
-            tone, // facoltativo per tua telemetria
-            behavior: getBehavior(tone) // *** passa sempre le additional_instructions ***
+            tone, // opzionale (telemetria lato server)
+            behavior: getBehavior(tone),       // istruzioni dinamiche
+            summary: buildSummary()            // *** sintesi chat inviata ad ogni chiamata ***
           })
         });
         const data = await res.json();
         thinking.remove();
-        if (data?.reply) addBubble(data.reply, "bot"); else addBubble("Risposta vuota dal server.", "bot");
+
+        if (data?.reply){
+          addBubble(data.reply, "bot");
+          history.push({ role:"assistant", content:data.reply });
+          saveHistory();
+        } else {
+          addBubble("Risposta vuota dal server.", "bot");
+        }
+
         if (data?.threadId && !threadId){
           threadId = data.threadId;
           localStorage.setItem("threadId", threadId);
