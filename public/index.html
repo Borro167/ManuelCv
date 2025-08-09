@@ -45,19 +45,12 @@
     .mini{ display:flex; gap:8px; align-items:center; justify-content:space-between; padding:8px 0 0 }
     .mini .left, .mini .right{ display:flex; gap:8px; align-items:center }
     .chip{ font-size:.9em; opacity:.8 }
-    details.settings{ margin: 12px 0 0; background:var(--surface); border:1px solid var(--border); border-radius:14px; overflow:hidden }
-    details.settings > summary{ cursor:pointer; list-style:none; padding:10px 12px; border-bottom:1px solid var(--border); font-weight:700 }
-    details.settings > div{ padding:12px }
-    .field{ display:grid; gap:6px; margin:8px 0 }
-    .field label{ font-size:.9em; opacity:.8 }
-    .field textarea, .field input{ width:100%; border:1px solid var(--border); background:transparent; color:var(--text); border-radius:10px; padding:10px }
-    .save{ display:flex; justify-content:flex-end; }
     @media (max-width:700px){
       .messages{ height:62dvh }
       .bubble{ max-width:86% }
     }
     @media print{
-      .topbar, .composer, .mini, details.settings{ display:none !important }
+      .topbar, .composer, .mini{ display:none !important }
       .container{ width:100%; margin:0; padding:0 }
       .chat{ border:none; box-shadow:none }
       .messages{ height:auto }
@@ -91,23 +84,6 @@
         </div>
       </div>
     </div>
-
-    <details class="settings" id="settings">
-      <summary>⚙️ Comportamento dell’assistente</summary>
-      <div>
-        <div class="field">
-          <label for="startMsg">Messaggio iniziale</label>
-          <input id="startMsg" type="text" placeholder="Sono l’assistente di Manuel. Ho accesso ai suoi ricordi: desideri sapere qualcosa su di lui?" />
-        </div>
-        <div class="field">
-          <label for="behavior">Istruzioni (persona/comportamento)</label>
-          <textarea id="behavior" rows="6" placeholder="Scrivi qui come deve comportarsi l’assistente..."></textarea>
-        </div>
-        <div class="save">
-          <button id="saveBehavior" class="btn secondary">Salva</button>
-        </div>
-      </div>
-    </details>
   </div>
 
   <script>
@@ -120,10 +96,6 @@
       theme: document.getElementById('theme'),
       netStatus: document.getElementById('netStatus'),
       threadChip: document.getElementById('threadChip'),
-      behavior: document.getElementById('behavior'),
-      startMsg: document.getElementById('startMsg'),
-      saveBehavior: document.getElementById('saveBehavior'),
-      settings: document.getElementById('settings')
     };
 
     // State
@@ -131,22 +103,12 @@
 
     // Defaults
     const DEFAULT_START = "Sono l’assistente di Manuel. Ho accesso ai suoi ricordi: desideri sapere qualcosa su di lui?";
-    const DEFAULT_BEHAVIOR = [
-      "Parla in italiano, tono diretto e conciso.",
-      "Usa la memoria attiva di Manuel quando pertinente, senza leggere istruzioni all’utente.",
-      "Non spiegare il funzionamento; vai dritto al punto.",
-      "Se servono chiarimenti, fai una domanda breve.",
-    ].join("\\n");
-
-    // Load persisted
-    el.startMsg.value = localStorage.getItem('startMsg') || DEFAULT_START;
-    el.behavior.value = localStorage.getItem('behavior') || DEFAULT_BEHAVIOR;
 
     // UI helpers
     function addBubble(text, who="bot"){
       const b = document.createElement('div');
       b.className = 'bubble ' + (who === 'me' ? 'me' : 'bot');
-      b.innerHTML = text.replace(/\\n/g, '<br>');
+      b.innerHTML = text.replace(/\n/g, '<br>');
       el.messages.appendChild(b);
       el.messages.scrollTop = el.messages.scrollHeight;
       return b;
@@ -164,9 +126,9 @@
       el.input.style.height = Math.min(el.input.scrollHeight, 180) + 'px';
     }
 
-    // Initial greeting (contextualizzato, senza spiegoni)
+    // Initial greeting (fisso, senza pannelli)
     if (!localStorage.getItem('greeted')){
-      addBubble(el.startMsg.value || DEFAULT_START, "bot");
+      addBubble(DEFAULT_START, "bot");
       localStorage.setItem('greeted', '1');
     }
 
@@ -177,18 +139,13 @@
       localStorage.removeItem('threadId');
       threadId = null;
       localStorage.removeItem('greeted');
-      addBubble(el.startMsg.value || DEFAULT_START, "bot");
+      addBubble(DEFAULT_START, "bot");
       el.threadChip.textContent = '—';
     });
     el.theme.addEventListener('click', () => {
       const html = document.documentElement;
       const isDark = html.getAttribute('data-theme') !== 'light';
       html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-    });
-    el.saveBehavior.addEventListener('click', () => {
-      localStorage.setItem('behavior', el.behavior.value.trim());
-      localStorage.setItem('startMsg', el.startMsg.value.trim());
-      addBubble("Comportamento aggiornato.", "bot");
     });
 
     // Autosize + key bindings
@@ -224,7 +181,7 @@
         const res = await fetch('/.netlify/functions/gptHandler', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text, threadId, behavior: (localStorage.getItem('behavior') || DEFAULT_BEHAVIOR) })
+          body: JSON.stringify({ message: text, threadId })
         });
         const data = await res.json();
         thinking.remove();
