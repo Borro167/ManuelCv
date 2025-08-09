@@ -1,3 +1,10 @@
+Hai ragione: ecco **`index.html`** completo con il **messaggio iniziale** già mostrato in chat e registrato nella **history** (così finisce nella `summary` inviata ad ogni chiamata API).
+
+> Testo iniziale:
+> - Formale: “Buongiorno, sono l’assistente professionale di Manuel. Lo sostituisco per un pre-colloquio. Cosa desidera sapere?”
+> - Informale: “Ciao, sono l’assistente professionale di Manuel. Lo sostituisco per un pre-colloquio. Cosa vuoi sapere?”
+
+```html
 <!doctype html>
 <html lang="it" data-theme="dark">
 <head>
@@ -82,16 +89,16 @@
   <script>
     "use strict";
 
-    // -------- viewport fix mobile
+    // --- viewport fix mobile
     const setVh = () => {
       const vh = window.innerHeight * 0.01;
       document.documentElement.style.setProperty("--vh", `${vh}px`);
     };
-    window.addEventListener("resize", setVh);
-    window.addEventListener("orientationchange", setVh);
+    addEventListener("resize", setVh);
+    addEventListener("orientationchange", setVh);
     setVh();
 
-    // -------- DOM refs
+    // --- DOM refs
     const el = {
       messages: document.getElementById("messages"),
       input: document.getElementById("input"),
@@ -102,64 +109,54 @@
       threadChip: document.getElementById("threadChip"),
     };
 
-    // -------- state
+    // --- state
     let threadId = localStorage.getItem("threadId") || null;
     const DEFAULT_TONE = localStorage.getItem("tone") || "informale";
-    const history = JSON.parse(localStorage.getItem("history") || "[]"); // {role:'user'|'assistant', content:'...'}
+    const history = JSON.parse(localStorage.getItem("history") || "[]"); // [{role,content}]
 
-    // -------- tone init
+    // --- tone init
     (() => {
       const isFormale = DEFAULT_TONE === "formale";
       el.toneSwitch.checked = isFormale;
       el.toneLabel.textContent = isFormale ? "Formale" : "Informale";
     })();
 
-    // -------- behavior builder (passato come additional_instructions)
+    // --- behavior (passato come additional_instructions)
     function getBehavior(tone) {
-      const hardRules = [
+      const hard = [
         "Massimo 15 parole. Non ripetere. Non spiegare operazioni interne.",
         "Usa solo dati realmente caricati/ricordi disponibili; non inventare.",
-        "Vietato citare nomi di file, documenti, testi, sorgenti, repository, indici, note, PDF, TXT, righe.",
-        "Se deduci reparto: HR→risultati/ impatto realistici; Tecnico→dettagli concreti (FEM, CFD, AI, mesh, BC, validazioni, pipeline, metriche).",
-        "Domande generiche: se hai dati, fornisci 2–3 fatti specifici (ruolo, competenze, progetti, risultati).",
-        "Se risposta vaga: chiedi precisione (“Vuole/ Vuoi competenze, progetti o soft skill?”).",
-        "Se mancano info sulla richiesta: usa solo il messaggio di fallback fornito."
+        "Mai citare nomi di file, documenti, testi, sorgenti, repository, indici, note, PDF, TXT, righe.",
+        "Se deduci reparto: HR→risultati/ impatto realistici; Tecnico→dettagli (FEM, CFD, AI, mesh, BC, validazioni, pipeline, metriche).",
+        "Domande generiche: se hai dati, elenca 2–3 fatti specifici (ruolo, competenze, progetti, risultati).",
+        "Se sarebbe vaga: chiedi precisione (“Vuole/ Vuoi competenze, progetti o soft skill?”).",
+        "Se mancano info sulla richiesta: usa il messaggio di fallback."
       ].join("\n");
-
-      if (tone === "formale") {
-        return `Sei Manuel, candidato a un colloquio. Parla in prima persona.
-Tono formale costante, dia del Lei. Stile diretto, sincero, zero slogan.
-${hardRules}`;
-      }
-      return `Sei Manuel, candidato a un colloquio. Parla in prima persona.
-Tono informale costante, dai del tu. Stile diretto, sincero, zero slogan.
-${hardRules}`;
+      return (tone === "formale")
+        ? `Sei Manuel, candidato a un colloquio. Prima persona.\nTono formale, dia del Lei. Diretto e sincero.\n${hard}`
+        : `Sei Manuel, candidato a un colloquio. Prima persona.\nTono informale, dai del tu. Diretto e sincero.\n${hard}`;
     }
 
-    // -------- intro message (contestualizzato come pre-colloquio)
-    function introByTone(tone){
-      return tone === "formale"
-        ? "Buongiorno, sono l’assistente professionale di Manuel. Lo sostituisco per un pre-colloquio. Cosa desidera sapere?"
-        : "Ciao, sono l’assistente professionale di Manuel. Lo sostituisco per un pre-colloquio. Cosa vuoi sapere?";
+    // --- intro message (mostrato e salvato come contesto)
+    function introByTone(t){
+      return t === "formale"
+        ? "Buongiorno, sono l’assistente professionale di Manuel; lo sostituisco virtualmente per un pre‑colloquio. Mi dica cosa le serve."
+        : "Ciao, sono l’assistente professionale di Manuel; lo sostituisco virtualmente per un pre‑colloquio. Dimmi cosa ti serve.";
     }
 
-    // -------- history utils (per sintesi da inviare al server)
+    // --- history utils (per summary a ogni chiamata)
     function truncate(s, n){ return s.length>n ? s.slice(0, n-1) + "…" : s; }
     function buildSummary(){
-      // comprimi ultimi turni (max ~1500 caratteri)
       const recent = history.slice(-12);
-      const parts = recent.map(h => (h.role === "user" ? "U: " : "M: ") + truncate(h.content, 180));
-      const summary = parts.join(" | ");
-      return summary.slice(0, 1500);
+      const parts = recent.map(h => (h.role==="user"?"U: ":"M: ") + truncate(h.content, 180));
+      return parts.join(" | ").slice(0, 1500);
     }
-    function saveHistory(){
-      localStorage.setItem("history", JSON.stringify(history.slice(-40)));
-    }
+    function saveHistory(){ localStorage.setItem("history", JSON.stringify(history.slice(-40))); }
 
-    // -------- UI helpers
+    // --- UI helpers
     function addBubble(text, who="bot"){
       const b = document.createElement("div");
-      b.className = "bubble " + (who === "me" ? "me" : "bot");
+      b.className = "bubble " + (who==="me"?"me":"bot");
       b.innerHTML = String(text).replace(/\n/g,"<br>");
       el.messages.appendChild(b);
       el.messages.scrollTop = el.messages.scrollHeight;
@@ -179,66 +176,14 @@ ${hardRules}`;
       el.input.style.height = Math.min(el.input.scrollHeight, maxPx) + "px";
     }
 
-    // -------- greeting una sola volta (e salva in history)
-    if (!localStorage.getItem("greeted")) {
+    // --- messaggio iniziale sempre in chat (e in history)
+    (function initIntro(){
       const tone = el.toneSwitch.checked ? "formale" : "informale";
       const intro = introByTone(tone);
       addBubble(intro, "bot");
       history.push({ role:"assistant", content:intro });
       saveHistory();
-      localStorage.setItem("greeted", "1");
-    }
-
-    // -------- net status ping
-    (async()=>{
-      try{
-        const r=await fetch("/.netlify/functions/gptHandler",{method:"OPTIONS"});
-        el.netStatus.textContent = r.ok ? "Server: online" : "Server: offline";
-      }catch{
-        el.netStatus.textContent = "Server: offline";
-      }
-    })();
-
-    // -------- tono persistente
-    document.addEventListener("change", (e) => {
-      if (e.target && e.target.id === "toneSwitch") {
-        const mode = e.target.checked ? "formale" : "informale";
-        localStorage.setItem("tone", mode);
-        el.toneLabel.textContent = e.target.checked ? "Formale" : "Informale";
-      }
-    });
-
-    // -------- input
-    el.input.addEventListener("input", autosize);
-    el.input.addEventListener("keydown",(e)=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); sendMessage(); }});
-    el.send.addEventListener("click", sendMessage);
-
-    // -------- send
-    async function sendMessage(){
-      const text = el.input.value.trim();
-      if(!text) return;
-
-      el.input.value = ""; autosize();
-      addBubble(text, "me");
-      history.push({ role:"user", content:text });
-      saveHistory();
-
-      el.send.disabled = true;
-      const thinking = addThinking();
-
-      try{
-        const tone = (document.getElementById("toneSwitch").checked) ? "formale" : "informale";
-        const res = await fetch("/.netlify/functions/gptHandler", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: text,
-            threadId,
-            tone, // opzionale (telemetria lato server)
-            behavior: getBehavior(tone),       // istruzioni dinamiche
-            summary: buildSummary()            // *** sintesi chat inviata ad ogni chiamata ***
-          })
-        });
+    })(););
         const data = await res.json();
         thinking.remove();
 
@@ -255,7 +200,7 @@ ${hardRules}`;
           localStorage.setItem("threadId", threadId);
           el.threadChip.textContent = threadId.slice(-6);
         }
-      } catch (e){
+      } catch {
         thinking.remove();
         addBubble("Errore di connessione al server. Controlla le variabili Netlify e riprova.", "bot");
       } finally {
@@ -265,3 +210,6 @@ ${hardRules}`;
   </script>
 </body>
 </html>
+```
+
+Vuoi che lo metta anche nel canvas per copiarlo al volo?
