@@ -10,7 +10,7 @@
       --bg: #0b0f1a;
       --bg-grad-1: #0b0f1a;
       --bg-grad-2: #121a2f;
-      --surface: #0f1629cc; /* glass */
+      --surface: #0f1629cc;
       --surface-2: #121a2fcc;
       --card: #131c37aa;
       --text: #e9eefc;
@@ -19,10 +19,8 @@
       --accent: #b38bff;
       --ok: #35d39e;
       --warn: #ffb64d;
-      --danger: #ff6b6b;
       --border: 1px solid rgba(255,255,255,.08);
       --shadow: 0 10px 40px rgba(0,0,0,.55);
-      --radius: 18px;
       --pad: clamp(12px, 2vw, 20px);
     }
     :root[data-theme="light"]{
@@ -41,7 +39,6 @@
                   linear-gradient(160deg, var(--bg-grad-1), var(--bg-grad-2));
       overflow:hidden;
     }
-
     .wrap{height:100dvh;display:grid;grid-template-rows:auto 1fr auto;}
 
     /* Header */
@@ -49,7 +46,6 @@
     .brand{display:flex;align-items:center;gap:12px}
     .logo{width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));color:#0b0f1a;font-weight:900;box-shadow:var(--shadow)}
     .title{font-weight:700;letter-spacing:.2px}
-
     .header-right{display:flex;align-items:center;gap:16px}
     .status{display:flex;align-items:center;gap:8px;font-size:.95em;color:var(--muted)}
     .dot{width:10px;height:10px;border-radius:999px;background:var(--warn);box-shadow:0 0 0 2px #0002}
@@ -63,7 +59,7 @@
     .toggle input:checked + label:after{left:30px}
     .toggle span{font-size:.95em;color:var(--muted)}
 
-    /* Messages */
+    /* Chat */
     .chat{max-width:980px;margin:0 auto;padding:16px var(--pad);overflow:auto;scroll-behavior:smooth}
     .msgs{display:flex;flex-direction:column;gap:12px;padding-bottom:24px}
     .msg{max-width:min(780px, 90%);padding:12px 14px;border-radius:18px;line-height:1.45;background:var(--card);backdrop-filter: blur(6px);box-shadow:var(--shadow);border:var(--border);animation:pop .15s ease}
@@ -112,7 +108,7 @@
       </div>
     </header>
 
-    <main class="chat" id="chat" aria-live="polite">
+    <main class="chat" aria-live="polite">
       <div class="msgs" id="messages"></div>
     </main>
 
@@ -127,194 +123,182 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    "use strict";
+  "use strict";
 
-    // DOM
-    const el = {
-      messages: document.getElementById("messages"),
-      input: document.getElementById("input"),
-      send: document.getElementById("send"),
-      toneSwitch: document.getElementById("toneSwitch"),
-      toneLabel: document.getElementById("toneLabel"),
-      netDot: document.getElementById("netDot"),
-      netText: document.getElementById("netText"),
-      toast: document.getElementById("toast"),
-    };
+  /* ===== SEMPRE NUOVA CHAT SU OGNI LOAD ===== */
+  try {
+    localStorage.removeItem("history");
+    localStorage.removeItem("threadId");
+  } catch {}
 
-    // STATE
-    let threadId = localStorage.getItem("threadId") || null;
-    let tone = localStorage.getItem("tone") || "informale"; // informale | formale
-    const history = JSON.parse(localStorage.getItem("history") || "[]");
+  /* DOM */
+  const el = {
+    messages: document.getElementById("messages"),
+    input: document.getElementById("input"),
+    send: document.getElementById("send"),
+    toneSwitch: document.getElementById("toneSwitch"),
+    toneLabel: document.getElementById("toneLabel"),
+    netDot: document.getElementById("netDot"),
+    netText: document.getElementById("netText"),
+    toast: document.getElementById("toast"),
+  };
 
-    // Utils
-    const nowTime = () => new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
-    const showToast = (t) => { if(!el.toast) return; el.toast.textContent = t; el.toast.classList.add("show"); setTimeout(()=>el.toast.classList.remove("show"), 2200); };
-    const truncate = (s,n) => s.length>n ? s.slice(0,n-1)+"…" : s;
-    const saveHistory = () => localStorage.setItem("history", JSON.stringify(history.slice(-50)));
-    const escapeHtml = (s) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;");
+  /* STATE */
+  let threadId = null; // niente persistenza
+  let tone = localStorage.getItem("tone") || "informale"; // salvo solo il tono
 
-    // Tone init
-    (function initTone(){
-      const isFormale = tone === "formale";
-      el.toneSwitch.checked = isFormale;
-      el.toneLabel.textContent = isFormale ? "Formale" : "Informale";
-    })();
+  /* UTILS */
+  const nowTime = () => new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+  const showToast = (t) => { if(!el.toast) return; el.toast.textContent=t; el.toast.classList.add("show"); setTimeout(()=>el.toast.classList.remove("show"), 2000); };
+  const escapeHtml = (s) => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
-    // Behavior passed as additional_instructions
-    function getBehavior(t){
-      const hard = [
-        "Parla chiaro, sintetico, orientato all’esito.",
-        "Rispondi subito con il punto chiave, poi dettagli.",
-        "Mantieni coerenza col ruolo di assistente di Manuel.",
-        "Usa solo dati disponibili; non inventare.",
-        "Se HR → risultati; se tecnico → dettagli e metriche.",
-        "Se domanda vaga → chiedi specifica.",
-        "Se mancano info → usa risposta di fallback."
-      ].join("\\n");
-      return t === "formale"
-        ? `Sei l’assistente professionale di Manuel, lo sostituisci virtualmente per un pre-colloquio. Tono formale (dare del Lei). Risposte dirette. ${hard}`
-        : `Sei l’assistente professionale di Manuel, lo sostituisci virtualmente per un pre-colloquio. Tono informale (dare del tu). Risposte dirette. ${hard}`;
+  /* TONE INIT */
+  (function initTone(){
+    el.toneSwitch.checked = (tone === "formale");
+    el.toneLabel.textContent = tone === "formale" ? "Formale" : "Informale";
+  })();
+
+  /* BEHAVIOR (istruzioni runtime) */
+  function getBehavior(t){
+    const lines = [
+      "Parla chiaro e sintetico.",
+      "Punto chiave subito, poi dettagli.",
+      "Coerente col ruolo di assistente di Manuel.",
+      "Non inventare dati.",
+      "Se domanda vaga → chiedi specifica."
+    ];
+    const hard = lines.join("\n");
+    return t === "formale"
+      ? `Sei l’assistente professionale di Manuel per un pre-colloquio. Tono formale (Lei). ${hard}`
+      : `Sei l’assistente professionale di Manuel per un pre-colloquio. Tono informale (tu). ${hard}`;
+  }
+
+  /* INTRO */
+  function introByTone(t){
+    return t === "formale"
+      ? "Buongiorno, sono l’assistente professionale di Manuel: lo sostituisco virtualmente per un pre-colloquio. Mi dica pure."
+      : "Ciao, sono l’assistente professionale di Manuel: lo sostituisco virtualmente per un pre-colloquio. Dimmi pure.";
+  }
+
+  /* UI BOLLE */
+  function addBubble(role, text){
+    const item = document.createElement("div");
+    const cls = role === "user" ? "me" : "bot";
+    item.className = `msg ${cls}`;
+    item.innerHTML = escapeHtml(text).replace(/\n/g,"<br>");
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = nowTime();
+    item.appendChild(meta);
+    el.messages.appendChild(item);
+    el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
+  }
+  function addThinking(){
+    const item = document.createElement("div");
+    item.className = "msg bot";
+    const dots = document.createElement("div");
+    dots.className = "typing";
+    dots.innerHTML = "<i></i><i></i><i></i>";
+    item.appendChild(dots);
+    el.messages.appendChild(item);
+    el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
+    return item;
+  }
+
+  /* AUTOSIZE */
+  function autosize(){
+    el.input.style.height = "auto";
+    const maxPx = Math.round(window.innerHeight * 0.33);
+    el.input.style.height = Math.min(el.input.scrollHeight, maxPx) + "px";
+  }
+
+  /* PING SERVER */
+  async function ping(){
+    try{
+      const res = await fetch("/.netlify/functions/gptHandler", { method:"OPTIONS" });
+      const ok = res.ok;
+      el.netDot.style.background = ok ? "var(--ok)" : "var(--warn)";
+      el.netText.textContent = ok ? "online" : "non raggiungibile";
+    }catch{
+      el.netDot.style.background = "var(--warn)";
+      el.netText.textContent = "non raggiungibile";
     }
+  }
 
-    // Intro message
-    function introByTone(t){
-      return t === "formale"
-        ? "Buongiorno, sono l’assistente professionale di Manuel; lo sostituisco virtualmente per un pre‑colloquio. Mi dica cosa le serve."
-        : "Ciao, sono l’assistente professionale di Manuel; lo sostituisco virtualmente per un pre‑colloquio. Dimmi cosa ti serve.";
-    }
+  /* SEND */
+  async function sendMessage(){
+    const text = (el.input.value || "").trim();
+    if(!text) return;
 
-    // Summary per chiamata
-    function buildSummary(){
-      const recent = history.slice(-12);
-      const parts = recent.map(h => (h.role==="user"?"U: ":"M: ")+truncate(h.content, 180));
-      return parts.join(" | ").slice(0, 1500);
-    }
+    addBubble("user", text);
+    el.input.value = "";
+    autosize();
+    el.send.disabled = true;
+    const thinking = addThinking();
 
-    // Render helpers
-    function addBubble(text, who="bot"){
-      const wrap = document.createElement("div");
-      wrap.className = `msg ${who}`;
-      wrap.innerHTML = escapeHtml(String(text)).replace(/\\n/g, "<br>");
-      const meta = document.createElement("div");
-      meta.className = "meta";
-      meta.textContent = nowTime();
-      wrap.appendChild(meta);
-      el.messages.appendChild(wrap);
-      el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
-      return wrap;
-    }
-    function addThinking(){
-      const wrap = document.createElement("div");
-      wrap.className = "msg bot";
-      const dots = document.createElement("div");
-      dots.className = "typing";
-      dots.innerHTML = "<i></i><i></i><i></i>";
-      wrap.appendChild(dots);
-      el.messages.appendChild(wrap);
-      el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
-      return wrap;
-    }
+    try{
+      const res = await fetch("/.netlify/functions/gptHandler", {
+        method: "POST",
+        headers: { "Content-Type":"application/json" },
+        body: JSON.stringify({
+          message: text,
+          threadId,                 // null alla prima → server crea thread nuovo
+          behavior: getBehavior(tone),
+          tone,
+          summary: ""               // niente memoria/riassunto
+        })
+      });
 
-    function autosize(){
-      el.input.style.height = "auto";
-      const maxPx = Math.round(window.innerHeight * 0.33);
-      el.input.style.height = Math.min(el.input.scrollHeight, maxPx) + "px";
-    }
+      el.netDot.style.background = res.ok ? "var(--ok)" : "var(--warn)";
+      el.netText.textContent = res.ok ? "online" : `errore ${res.status}`;
 
-    // Ping server
-    async function pingServer(){
-      try{
-        const r = await fetch("/.netlify/functions/gptHandler", {method:"OPTIONS"});
-        const ok = !!r.ok;
-        el.netDot.style.background = ok ? "var(--ok)" : "var(--warn)";
-        el.netText.textContent = ok ? "online" : "non raggiungibile";
-      }catch{
-        el.netDot.style.background = "var(--warn)";
-        el.netText.textContent = "non raggiungibile";
+      const data = await res.json();
+      thinking.remove();
+
+      if (!threadId && data && data.threadId) {
+        // Solo in RAM per questa sessione (no localStorage)
+        threadId = data.threadId;
       }
+
+      const reply = (data && data.reply) ? data.reply : "Nessuna risposta ricevuta.";
+      addBubble("assistant", reply);
+
+    }catch(err){
+      thinking.remove();
+      addBubble("assistant", "Errore di connessione. Riprova tra poco.");
+      el.netDot.style.background = "var(--warn)";
+      el.netText.textContent = "non raggiungibile";
+      console.error(err);
+    }finally{
+      el.send.disabled = false;
+      el.input.focus();
     }
+  }
 
-    // Init: intro if first visit
-    (function initIntro(){
-      if (!history.length){
-        const intro = introByTone(tone);
-        addBubble(intro, "bot");
-        history.push({role:"assistant", content:intro});
-        saveHistory();
-      }else{
-        const recent = history.slice(-30);
-        for(const h of recent){ addBubble(h.content, h.role==="user"?"me":"bot"); }
-      }
-      autosize();
-      pingServer();
-    })();
-
-    // Send
-    async function sendMessage(){
-      const text = el.input.value.trim();
-      if(!text) return;
-
-      addBubble(text, "me");
-      history.push({role:"user", content:text});
-      saveHistory();
-      el.input.value = "";
-      autosize();
-      el.send.disabled = true;
-      const thinking = addThinking();
-
-      try{
-        const res = await fetch("/.netlify/functions/gptHandler",{
-          method:"POST", headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({
-            message: text,
-            threadId,
-            behavior: getBehavior(tone),
-            tone,
-            summary: buildSummary(),
-          })
-        });
-        el.netDot.style.background = res.ok ? "var(--ok)" : "var(--warn)";
-        el.netText.textContent = res.ok ? "online" : `errore ${res.status}`;
-        const data = await res.json();
-        thinking.remove();
-
-        if (data?.reply){
-          addBubble(data.reply, "bot");
-          history.push({role:"assistant", content:data.reply});
-          saveHistory();
-        } else {
-          addBubble("Risposta vuota dal server.", "bot");
-        }
-        if (data?.threadId){
-          threadId = data.threadId;
-          localStorage.setItem("threadId", threadId);
-        }
-      }catch(e){
-        thinking.remove();
-        addBubble("Errore di connessione. Controlla le variabili Netlify e riprova.", "bot");
-        el.netDot.style.background = "var(--warn)";
-        el.netText.textContent = "non raggiungibile";
-      }finally{
-        el.send.disabled = false;
-        el.input.focus();
-      }
+  /* EVENTS */
+  el.send.addEventListener("click", sendMessage);
+  el.input.addEventListener("keydown", (ev)=>{
+    if(ev.key === "Enter" && !ev.shiftKey){
+      ev.preventDefault();
+      sendMessage();
     }
+  });
+  el.input.addEventListener("input", autosize);
 
-    // Events
-    el.send.addEventListener("click", sendMessage);
-    el.input.addEventListener("keydown", (ev)=>{
-      if(ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); sendMessage(); }
-    });
-    el.input.addEventListener("input", autosize);
+  el.toneSwitch.addEventListener("change", ()=>{
+    tone = el.toneSwitch.checked ? "formale" : "informale";
+    el.toneLabel.textContent = el.toneSwitch.checked ? "Formale" : "Informale";
+    localStorage.setItem("tone", tone); // salvo SOLO il tono
+    showToast(`Tono: ${tone}`);
+    // (opzionale) per switchare anche il tema:
+    // document.documentElement.setAttribute("data-theme", el.toneSwitch.checked ? "light" : "dark");
+  });
 
-    el.toneSwitch.addEventListener("change", ()=>{
-      tone = el.toneSwitch.checked ? "formale" : "informale";
-      el.toneLabel.textContent = el.toneSwitch.checked ? "Formale" : "Informale";
-      localStorage.setItem("tone", tone);
-      showToast(`Tono: ${tone}`);
-      // (opzionale) per attivare tema chiaro/scuro sulla UI:
-      // document.documentElement.setAttribute("data-theme", el.toneSwitch.checked ? "light" : "dark");
-    });
+  /* BOOTSTRAP */
+  addBubble("assistant", introByTone(tone));
+  autosize();
+  ping();
+  setInterval(ping, 15000);
   </script>
 </body>
 </html>
