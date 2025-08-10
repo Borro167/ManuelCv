@@ -1,5 +1,4 @@
 // netlify/functions/gptHandler.js
-// Env richieste su Netlify: OPENAI_API_KEY, OPENAI_ASSISTANT_ID
 import OpenAI from "openai";
 
 const CORS = {
@@ -8,21 +7,38 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-/* stessa pulizia anche lato server */
-function sanitizeReply(text) {
+// stessa pulizia lato server
+function sanitizeReply(text){
   let s = String(text || "");
-  s = s.replace(/(\s*`?\[\d+(?::[^\]]+)?\]`?)+/g, ""); // [1][2] / [6:qualcosa]
-  s = s.replace(/\s*\[\^[^\]]+\]/g, "");                // [^1]
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");      // [titolo](url) -> titolo
-  s = s.replace(/`{1,3}([^`]+)`{1,3}/g, "$1");          // backtick
-  s = s.replace(/\s*[\(\[\{]\s*[\)\]\}]\s*/g, "");      // parentesi vuote
-  s = s.replace(/\s{2,}/g, " ").replace(/\s+([,.;:!?])/g, "$1").trim();
-  return s;
+
+  // blocchi editoriali tipo 【...】 o 〔...〕
+  s = s.replace(/[【〔][^】〕]*[】〕]/g, "");
+
+  // [1], [1][2], [8:0+file.ext], [^1], [qualcosa.pdf|txt|...]
+  s = s.replace(
+    /(?:\s*`?\[(?:\^\w+|\d+(?::[^\]]+)?|[^\]]{1,120}\.(?:pdf|docx?|xlsx?|pptx?|txt|md|png|jpe?g|webp|svg))\]`?)+/gi,
+    ""
+  );
+
+  // [testo](url) -> testo
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
+
+  // <http://...> -> rimuovi
+  s = s.replace(/<https?:\/\/[^>\s]+>/gi, "");
+
+  // backtick (inline + blocchi)
+  s = s.replace(/`{1,3}([\s\S]*?)`{1,3}/g, "$1");
+
+  // parentesi/brackets vuoti + spazi
+  s = s.replace(/\s*[\(\[\{]\s*[\)\]\}]\s*/g, "");
+  s = s.replace(/\s{2,}/g, " ").replace(/\s+([,.;:!?])/g, "$1");
+
+  return s.trim();
 }
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-export async function handler(event) {
+export async function handler(event){
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers: CORS, body: "" };
   }
@@ -56,7 +72,7 @@ export async function handler(event) {
       threadId = thread.id;
     }
 
-    // 2) (opzionale) inietta sintesi
+    // 2) (opzionale) sintesi
     if (summary) {
       await client.beta.threads.messages.create(threadId, {
         role: "user",
@@ -65,19 +81,16 @@ export async function handler(event) {
     }
 
     // 3) Messaggio utente
-    await client.beta.threads.messages.create(threadId, {
-      role: "user",
-      content: userText
-    });
+    await client.beta.threads.messages.create(threadId, { role: "user", content: userText });
 
-    // 4) Run
+    // 4) Run Assistants
     let run = await client.beta.threads.runs.create(threadId, {
       assistant_id: process.env.OPENAI_ASSISTANT_ID,
       additional_instructions: behavior,
       metadata: { tone }
     });
 
-    // 5) Poll (entro ~55s per Netlify)
+    // 5) Poll (max ~55s per Netlify)
     const start = Date.now();
     const timeoutMs = 55000;
     while (["queued","in_progress","requires_action","cancelling"].includes(run.status)) {
@@ -86,7 +99,7 @@ export async function handler(event) {
       run = await client.beta.threads.runs.retrieve(threadId, run.id);
     }
 
-    // 6) Estrai risposta
+    // 6) Ultima risposta
     const list = await client.beta.threads.messages.list(threadId, { limit: 10, order: "desc" });
     const assistantMsg = list.data.find(m => m.role === "assistant");
     let reply = assistantMsg?.content?.find?.(c => c.type === "text")?.text?.value
