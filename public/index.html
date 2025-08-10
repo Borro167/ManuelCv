@@ -40,26 +40,12 @@
       overflow:hidden;
     }
     .wrap{height:100dvh;display:grid;grid-template-rows:auto 1fr auto;}
-
-    /* Header */
     .header{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px var(--pad);backdrop-filter: blur(10px);background:linear-gradient(180deg, var(--surface), transparent);border-bottom:var(--border)}
     .brand{display:flex;align-items:center;gap:12px}
     .logo{width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));color:#0b0f1a;font-weight:900;box-shadow:var(--shadow)}
     .title{font-weight:700;letter-spacing:.2px}
-    .header-right{display:flex;align-items:center;gap:16px}
     .status{display:flex;align-items:center;gap:8px;font-size:.95em;color:var(--muted)}
     .dot{width:10px;height:10px;border-radius:999px;background:var(--warn);box-shadow:0 0 0 2px #0002}
-
-    /* Toggle */
-    .toggle{display:flex;align-items:center;gap:10px}
-    .toggle input{position:absolute;opacity:0}
-    .toggle label{position:relative;width:60px;height:34px;border-radius:999px;background:#6b7280;display:block;cursor:pointer;border:var(--border);transition:.2s ease all}
-    .toggle label:after{content:"";position:absolute;top:50%;left:4px;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.25);transition:.2s ease left}
-    .toggle input:checked + label{background:linear-gradient(135deg,var(--primary),var(--accent))}
-    .toggle input:checked + label:after{left:30px}
-    .toggle span{font-size:.95em;color:var(--muted)}
-
-    /* Chat */
     .chat{max-width:980px;margin:0 auto;padding:16px var(--pad);overflow:auto;scroll-behavior:smooth}
     .msgs{display:flex;flex-direction:column;gap:12px;padding-bottom:24px}
     .msg{max-width:min(780px, 90%);padding:12px 14px;border-radius:18px;line-height:1.45;background:var(--card);backdrop-filter: blur(6px);box-shadow:var(--shadow);border:var(--border);animation:pop .15s ease}
@@ -72,18 +58,11 @@
     .typing i:nth-child(3){animation-delay:.3s}
     @keyframes bump{0%{transform:translateY(0)}50%{transform:translateY(-4px)}100%{transform:translateY(0)}}
     @keyframes pop{from{transform:translateY(4px);opacity:.0}to{transform:translateY(0);opacity:1}}
-
-    /* Composer */
     .composer{position:sticky;bottom:0;z-index:15;padding:12px var(--pad) calc(12px + env(safe-area-inset-bottom));background:linear-gradient(0deg, var(--surface-2), transparent);backdrop-filter: blur(10px);border-top:var(--border)}
     .row{max-width:980px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
     textarea{flex:1;min-height:48px;max-height:33dvh;resize:none;padding:12px 14px;border-radius:16px;border:var(--border);background:rgba(255,255,255,.03);color:var(--text);outline:none}
     .btn{height:48px;display:inline-flex;align-items:center;gap:10px;padding:0 16px;border-radius:14px;border:none;cursor:pointer;font-weight:700;color:#0b0f1a;background:linear-gradient(135deg,var(--primary),var(--accent));box-shadow:var(--shadow)}
     .btn[disabled]{opacity:.7;cursor:wait}
-
-    /* Toast */
-    .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#11172c;box-shadow:var(--shadow);border:var(--border);padding:10px 14px;border-radius:12px;color:var(--text);opacity:0;pointer-events:none;transition:.25s ease opacity}
-    .toast.show{opacity:1}
-
     @media (max-width:720px){.msg{max-width:92%}}
     @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
   </style>
@@ -95,16 +74,9 @@
         <div class="logo">M</div>
         <div class="title">Assistente di Manuel</div>
       </div>
-      <div class="header-right">
-        <div class="status" title="Stato server">
-          <span class="dot" id="netDot"></span>
-          <span id="netText">controllo…</span>
-        </div>
-        <div class="toggle">
-          <span id="toneLabel">Informale</span>
-          <input type="checkbox" id="toneSwitch" />
-          <label for="toneSwitch" aria-label="Cambia tono"></label>
-        </div>
+      <div class="status" title="Stato server">
+        <span class="dot" id="netDot"></span>
+        <span id="netText">controllo…</span>
       </div>
     </header>
 
@@ -123,210 +95,27 @@
   <div class="toast" id="toast"></div>
 
   <script>
-  "use strict";
-
-  /* ===== SEMPRE CHAT NUOVA AD OGNI APERTURA ===== */
-  try {
-    localStorage.removeItem("history");
-    localStorage.removeItem("threadId");
-  } catch {}
-
-  /* DOM */
-  const el = {
-    messages: document.getElementById("messages"),
-    input: document.getElementById("input"),
-    send: document.getElementById("send"),
-    toneSwitch: document.getElementById("toneSwitch"),
-    toneLabel: document.getElementById("toneLabel"),
-    netDot: document.getElementById("netDot"),
-    netText: document.getElementById("netText"),
-    toast: document.getElementById("toast"),
-  };
-
-  /* STATE */
-  let threadId = null;                                   // solo RAM (sessione)
-  let tone = localStorage.getItem("tone") || "informale"; // persistiamo solo il tono
-
-  /* UTILS */
-  const nowTime = () => new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
-  const showToast = (t) => { if(!el.toast) return; el.toast.textContent=t; el.toast.classList.add("show"); setTimeout(()=>el.toast.classList.remove("show"), 2000); };
-  const escapeHtml = (s) => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-
-  /* SANITIZE: rimuove riferimenti/citazioni/link/backtick */
-  function sanitize(text){
-    let s = String(text);
-
-    // 【...】 o 〔...〕 (citazioni stile editor)
-    s = s.replace(/[【〔][^】〕]*[】〕]/g, "");
-
-    // [1], [1][2], [8:0+file.ext], [^1], [qualcosa.pdf|txt|...]
-    s = s.replace(
-      /(?:\s*`?\[(?:\^\w+|\d+(?::[^\]]+)?|[^\]]{1,120}\.(?:pdf|docx?|xlsx?|pptx?|txt|md|png|jpe?g|webp|svg))\]`?)+/gi,
-      ""
-    );
-
-    // [testo](url) -> testo
-    s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
-
-    // <http://...> -> rimuovi
-    s = s.replace(/<https?:\/\/[^>\s]+>/gi, "");
-
-    // backtick (inline e blocchi)
-    s = s.replace(/`{1,3}([\s\S]*?)`{1,3}/g, "$1");
-
-    // parentesi/brackets vuoti + spazi
-    s = s.replace(/\s*[\(\[\{]\s*[\)\]\}]\s*/g, "");
-    s = s.replace(/\s{2,}/g, " ").replace(/\s+([,.;:!?])/g, "$1");
-
-    return s.trim();
-  }
-
-  /* TONE INIT */
-  (function(){
-    el.toneSwitch.checked = (tone === "formale");
-    el.toneLabel.textContent = tone === "formale" ? "Formale" : "Informale";
-  })();
-
-  /* BEHAVIOR */
-  function getBehavior(t){
-    const hard = [
-      "Parla chiaro e sintetico.",
-      "Punto chiave subito, poi dettagli.",
-      "Coerente col ruolo di assistente di Manuel.",
-      "Non inventare dati.",
-      "Se domanda vaga → chiedi specifica."
-    ].join("\\n");
-    return t === "formale"
-      ? `Sei l’assistente professionale di Manuel per un pre-colloquio. Tono formale (Lei). ${hard}`
-      : `Sei l’assistente professionale di Manuel per un pre-colloquio. Tono informale (tu). ${hard}`;
-  }
-
-  /* Intro */
-  function introByTone(t){
-    return t === "formale"
-      ? "Buongiorno, sono l’assistente professionale di Manuel: lo sostituisco virtualmente per un pre-colloquio. Mi dica pure."
-      : "Ciao, sono l’assistente professionale di Manuel: lo sostituisco virtualmente per un pre-colloquio. Dimmi pure.";
-  }
-
-  /* UI bolle */
-  function addBubble(role, text){
-    const wrap = document.createElement("div");
-    wrap.className = `msg ${role === "user" ? "me" : "bot"}`;
-
-    // solo la risposta dell’assistente passa da sanitize
-    const safe = role === "assistant" ? sanitize(text) : String(text);
-
-    wrap.innerHTML = escapeHtml(safe).replace(/\\n/g,"<br>");
-    const meta = document.createElement("div");
-    meta.className = "meta";
-    meta.textContent = nowTime();
-    wrap.appendChild(meta);
-    el.messages.appendChild(wrap);
-    el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
-  }
-  function addThinking(){
-    const wrap = document.createElement("div");
-    wrap.className = "msg bot";
-    const dots = document.createElement("div");
-    dots.className = "typing";
-    dots.innerHTML = "<i></i><i></i><i></i>";
-    wrap.appendChild(dots);
-    el.messages.appendChild(wrap);
-    el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
-    return wrap;
-  }
-
-  /* Autosize */
-  function autosize(){
-    el.input.style.height = "auto";
-    const maxPx = Math.round(window.innerHeight * 0.33);
-    el.input.style.height = Math.min(el.input.scrollHeight, maxPx) + "px";
-  }
-
-  /* Ping server */
-  async function ping(){
-    try{
-      const res = await fetch("/.netlify/functions/gptHandler", { method:"OPTIONS" });
-      const ok = res.ok;
-      el.netDot.style.background = ok ? "var(--ok)" : "var(--warn)";
-      el.netText.textContent = ok ? "online" : "non raggiungibile";
-    }catch{
-      el.netDot.style.background = "var(--warn)";
-      el.netText.textContent = "non raggiungibile";
-    }
-  }
-
-  /* Send */
-  async function sendMessage(){
-    const text = (el.input.value || "").trim();
-    if(!text) return;
-
-    addBubble("user", text);
-    el.input.value = "";
-    autosize();
-    el.send.disabled = true;
-    const thinking = addThinking();
-
-    try{
-      const res = await fetch("/.netlify/functions/gptHandler", {
-        method: "POST",
-        headers: { "Content-Type":"application/json" },
-        body: JSON.stringify({
-          message: text,
-          threadId,
-          behavior: getBehavior(tone),
-          tone,
-          summary: ""
-        })
-      });
-
-      el.netDot.style.background = res.ok ? "var(--ok)" : "var(--warn)";
-      el.netText.textContent = res.ok ? "online" : `errore ${res.status}`;
-
-      const data = await res.json();
-      thinking.remove();
-
-      if (!threadId && data?.threadId) {
-        threadId = data.threadId; // solo in RAM
-      }
-
-      const reply = data?.reply || "Nessuna risposta ricevuta.";
-      addBubble("assistant", reply);
-
-    }catch(err){
-      thinking.remove();
-      addBubble("assistant", "Errore di connessione. Riprova tra poco.");
-      el.netDot.style.background = "var(--warn)";
-      el.netText.textContent = "non raggiungibile";
-      console.error(err);
-    }finally{
-      el.send.disabled = false;
-      el.input.focus();
-    }
-  }
-
-  /* Events */
-  el.send.addEventListener("click", sendMessage);
-  el.input.addEventListener("keydown", (ev)=>{
-    if(ev.key === "Enter" && !ev.shiftKey){
-      ev.preventDefault();
-      sendMessage();
-    }
-  });
-  el.input.addEventListener("input", autosize);
-
-  el.toneSwitch.addEventListener("change", ()=>{
-    tone = el.toneSwitch.checked ? "formale" : "informale";
-    el.toneLabel.textContent = el.toneSwitch.checked ? "Formale" : "Informale";
-    localStorage.setItem("tone", tone);
-    showToast(`Tono: ${tone}`);
-  });
-
-  /* Bootstrap */
-  addBubble("assistant", introByTone(tone));
-  autosize();
-  ping();
-  setInterval(ping, 15000);
+"use strict";
+try { localStorage.removeItem("history"); localStorage.removeItem("threadId"); } catch {}
+const el = { messages: document.getElementById("messages"), input: document.getElementById("input"), send: document.getElementById("send"), netDot: document.getElementById("netDot"), netText: document.getElementById("netText"), toast: document.getElementById("toast") };
+let threadId = null;
+const nowTime = () => new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+const escapeHtml = (s) => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+function sanitize(text){ let s = String(text); s = s.replace(/[【〔][^】〕]*[】〕]/g, ""); s = s.replace(/(?:\s*`?\[(?:\^\w+|\d+(?::[^\]]+)?|[^\]]{1,120}\.(?:pdf|docx?|xlsx?|pptx?|txt|md|png|jpe?g|webp|svg))\]`?)+/gi, ""); s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1"); s = s.replace(/<https?:\/\/[^>\s]+>/gi, ""); s = s.replace(/`{1,3}([\s\S]*?)`{1,3}/g, "$1"); s = s.replace(/\s*[\(\[\{]\s*[\)\]\}]\s*/g, ""); s = s.replace(/\s{2,}/g, " ").replace(/\s+([,.;:!?])/g, "$1"); return s.trim(); }
+function getBehavior(){ return ["Parla chiaro e sintetico.","Punto chiave subito, poi dettagli.","Coerente col ruolo di assistente di Manuel.","Non inventare dati.","Se la domanda è vaga, chiedi una specifica."].join("\n"); }
+function introText(){ return "Buongiorno, sono l’assistente professionale di Manuel: lo sostituisco virtualmente per un pre-colloquio. Mi dica pure."; }
+function addBubble(role,text){ const wrap=document.createElement("div"); wrap.className=`msg ${role==="user"?"me":"bot"}`; const safe=role==="assistant"?sanitize(text):String(text); wrap.innerHTML=escapeHtml(safe).replace(/\n/g,"<br>"); const meta=document.createElement("div"); meta.className="meta"; meta.textContent=nowTime(); wrap.appendChild(meta); el.messages.appendChild(wrap); el.messages.parentElement.scrollTop=el.messages.parentElement.scrollHeight; }
+function addThinking(){ const wrap=document.createElement("div"); wrap.className="msg bot"; const dots=document.createElement("div"); dots.className="typing"; dots.innerHTML="<i></i><i></i><i></i>"; wrap.appendChild(dots); el.messages.appendChild(wrap); el.messages.parentElement.scrollTop=el.messages.parentElement.scrollHeight; return wrap; }
+function autosize(){ el.input.style.height="auto"; const maxPx=Math.round(window.innerHeight*0.33); el.input.style.height=Math.min(el.input.scrollHeight,maxPx)+"px"; }
+async function ping(){ try{ const res=await fetch("/.netlify/functions/gptHandler",{method:"OPTIONS"}); el.netDot.style.background=res.ok?"var(--ok)":"var(--warn)"; el.netText.textContent=res.ok?"online":"non raggiungibile"; }catch{ el.netDot.style.background="var(--warn)"; el.netText.textContent="non raggiungibile"; } }
+async function sendMessage(){ const text=(el.input.value||"").trim(); if(!text) return; addBubble("user",text); el.input.value=""; autosize(); el.send.disabled=true; const thinking=addThinking(); try{ const res=await fetch("/.netlify/functions/gptHandler",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:text,threadId,behavior:getBehavior(),summary:""})}); el.netDot.style.background=res.ok?"var(--ok)":"var(--warn)"; el.netText.textContent=res.ok?"online":`errore ${res.status}`; const data=await res.json(); thinking.remove(); if(!threadId && data?.threadId){ threadId=data.threadId; } const reply=data?.reply||"Nessuna risposta ricevuta."; addBubble("assistant",reply); }catch(err){ thinking.remove(); addBubble("assistant","Errore di connessione. Riprova tra poco."); el.netDot.style.background="var(--warn)"; el.netText.textContent="non raggiungibile"; console.error(err); }finally{ el.send.disabled=false; el.input.focus(); } }
+el.send.addEventListener("click", sendMessage);
+el.input.addEventListener("keydown", (ev)=>{ if(ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); sendMessage(); } });
+el.input.addEventListener("input", autosize);
+addBubble("assistant", introText());
+autosize();
+ping();
+setInterval(ping,15000);
   </script>
 </body>
 </html>
