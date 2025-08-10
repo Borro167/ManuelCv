@@ -4,4 +4,4 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["openai", "@netlify/functions"]
+  external_node_modules = ["openai"]
