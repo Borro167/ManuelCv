@@ -201,8 +201,7 @@ ${hard}`;
     function addBubble(text, who="bot"){
       const wrap = document.createElement("div");
       wrap.className = `msg ${who}`;
-      wrap.innerHTML = String(text).replace(/
-/g, "<br>");
+      wrap.innerHTML = String(text).replace(/\n/g, "<br>");
       const meta = document.createElement("div");
       meta.className = "meta";
       meta.textContent = nowTime();
