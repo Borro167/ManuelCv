@@ -25,7 +25,7 @@
       --radius: 18px;
       --pad: clamp(12px, 2vw, 20px);
     }
-    [data-theme="light"]{
+    :root[data-theme="light"]{
       --bg:#f7f8ff;--bg-grad-1:#f7f8ff;--bg-grad-2:#e9ecff;
       --surface:#ffffffcc;--surface-2:#ffffffee;--card:#ffffffcc;
       --text:#0b0f1a;--muted:#4a5470;--border:1px solid rgba(0,0,0,.08);
@@ -148,7 +148,10 @@
 
     // Utils
     const nowTime = () => new Date().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
-    const showToast = (t) => { el.toast.textContent = t; el.toast.classList.add("show"); setTimeout(()=>el.toast.classList.remove("show"), 2200); };
+    const showToast = (t) => { if(!el.toast) return; el.toast.textContent = t; el.toast.classList.add("show"); setTimeout(()=>el.toast.classList.remove("show"), 2200); };
+    const truncate = (s,n) => s.length>n ? s.slice(0,n-1)+"…" : s;
+    const saveHistory = () => localStorage.setItem("history", JSON.stringify(history.slice(-50)));
+    const escapeHtml = (s) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;");
 
     // Tone init
     (function initTone(){
@@ -157,28 +160,20 @@
       el.toneLabel.textContent = isFormale ? "Formale" : "Informale";
     })();
 
-    // Viewport
-    const setVh = () => { document.documentElement.style.setProperty("--vh", window.innerHeight * 0.01 + "px"); };
-    addEventListener("resize", setVh); addEventListener("orientationchange", setVh); setVh();
-
     // Behavior passed as additional_instructions
     function getBehavior(t){
       const hard = [
-        "Massimo 15 parole. Niente giri di parole.",
+        "Parla chiaro, sintetico, orientato all’esito.",
+        "Rispondi subito con il punto chiave, poi dettagli.",
+        "Mantieni coerenza col ruolo di assistente di Manuel.",
         "Usa solo dati disponibili; non inventare.",
-        "Non nominare file/sorgenti/righe.",
         "Se HR → risultati; se tecnico → dettagli e metriche.",
         "Se domanda vaga → chiedi specifica.",
         "Se mancano info → usa risposta di fallback."
-      ].join("
-");
+      ].join("\\n");
       return t === "formale"
-        ? `Sei Manuel, candidato in un pre‑colloquio. Prima persona.
-Tono formale, dia del Lei. Direttissimo.
-${hard}`
-        : `Sei Manuel, candidato in un pre‑colloquio. Prima persona.
-Tono informale, dai del tu. Direttissimo.
-${hard}`;
+        ? `Sei l’assistente professionale di Manuel, lo sostituisci virtualmente per un pre-colloquio. Tono formale (dare del Lei). Risposte dirette. ${hard}`
+        : `Sei l’assistente professionale di Manuel, lo sostituisci virtualmente per un pre-colloquio. Tono informale (dare del tu). Risposte dirette. ${hard}`;
     }
 
     // Intro message
@@ -188,20 +183,18 @@ ${hard}`;
         : "Ciao, sono l’assistente professionale di Manuel; lo sostituisco virtualmente per un pre‑colloquio. Dimmi cosa ti serve.";
     }
 
-    // History helpers
-    function truncate(s,n){ return s.length>n ? s.slice(0,n-1)+"…" : s; }
+    // Summary per chiamata
     function buildSummary(){
       const recent = history.slice(-12);
       const parts = recent.map(h => (h.role==="user"?"U: ":"M: ")+truncate(h.content, 180));
       return parts.join(" | ").slice(0, 1500);
     }
-    function saveHistory(){ localStorage.setItem("history", JSON.stringify(history.slice(-50))); }
 
     // Render helpers
     function addBubble(text, who="bot"){
       const wrap = document.createElement("div");
       wrap.className = `msg ${who}`;
-      wrap.innerHTML = String(text).replace(/\n/g, "<br>");
+      wrap.innerHTML = escapeHtml(String(text)).replace(/\\n/g, "<br>");
       const meta = document.createElement("div");
       meta.className = "meta";
       meta.textContent = nowTime();
@@ -231,13 +224,13 @@ ${hard}`;
     // Ping server
     async function pingServer(){
       try{
-        const r = await fetch('/.netlify/functions/gptHandler', {method:'OPTIONS'});
+        const r = await fetch("/.netlify/functions/gptHandler", {method:"OPTIONS"});
         const ok = !!r.ok;
-        el.netDot.style.background = ok ? 'var(--ok)' : 'var(--warn)';
-        el.netText.textContent = ok ? 'online' : 'non raggiungibile';
+        el.netDot.style.background = ok ? "var(--ok)" : "var(--warn)";
+        el.netText.textContent = ok ? "online" : "non raggiungibile";
       }catch{
-        el.netDot.style.background = 'var(--warn)';
-        el.netText.textContent = 'non raggiungibile';
+        el.netDot.style.background = "var(--warn)";
+        el.netText.textContent = "non raggiungibile";
       }
     }
 
@@ -245,9 +238,12 @@ ${hard}`;
     (function initIntro(){
       if (!history.length){
         const intro = introByTone(tone);
-        addBubble(intro, 'bot');
-        history.push({role:'assistant', content:intro});
+        addBubble(intro, "bot");
+        history.push({role:"assistant", content:intro});
         saveHistory();
+      }else{
+        const recent = history.slice(-30);
+        for(const h of recent){ addBubble(h.content, h.role==="user"?"me":"bot"); }
       }
       autosize();
       pingServer();
@@ -258,17 +254,17 @@ ${hard}`;
       const text = el.input.value.trim();
       if(!text) return;
 
-      addBubble(text, 'me');
-      history.push({role:'user', content:text});
+      addBubble(text, "me");
+      history.push({role:"user", content:text});
       saveHistory();
-      el.input.value = '';
+      el.input.value = "";
       autosize();
       el.send.disabled = true;
       const thinking = addThinking();
 
       try{
-        const res = await fetch('/.netlify/functions/gptHandler',{
-          method:'POST', headers:{'Content-Type':'application/json'},
+        const res = await fetch("/.netlify/functions/gptHandler",{
+          method:"POST", headers:{"Content-Type":"application/json"},
           body: JSON.stringify({
             message: text,
             threadId,
@@ -277,45 +273,47 @@ ${hard}`;
             summary: buildSummary(),
           })
         });
-        el.netDot.style.background = res.ok ? 'var(--ok)' : 'var(--warn)';
-        el.netText.textContent = res.ok ? 'online' : `errore ${res.status}`;
+        el.netDot.style.background = res.ok ? "var(--ok)" : "var(--warn)";
+        el.netText.textContent = res.ok ? "online" : `errore ${res.status}`;
         const data = await res.json();
         thinking.remove();
 
         if (data?.reply){
-          addBubble(data.reply, 'bot');
-          history.push({role:'assistant', content:data.reply});
+          addBubble(data.reply, "bot");
+          history.push({role:"assistant", content:data.reply});
           saveHistory();
         } else {
-          addBubble('Risposta vuota dal server.', 'bot');
+          addBubble("Risposta vuota dal server.", "bot");
         }
-        if (data?.threadId && !threadId){
+        if (data?.threadId){
           threadId = data.threadId;
-          localStorage.setItem('threadId', threadId);
-          showToast(`Thread creato: …${threadId.slice(-6)}`);
+          localStorage.setItem("threadId", threadId);
         }
       }catch(e){
         thinking.remove();
-        addBubble('Errore di connessione. Controlla le variabili Netlify e riprova.', 'bot');
-        el.netDot.style.background = 'var(--warn)';
-        el.netText.textContent = 'non raggiungibile';
+        addBubble("Errore di connessione. Controlla le variabili Netlify e riprova.", "bot");
+        el.netDot.style.background = "var(--warn)";
+        el.netText.textContent = "non raggiungibile";
       }finally{
         el.send.disabled = false;
+        el.input.focus();
       }
     }
 
     // Events
-    el.send.addEventListener('click', sendMessage);
-    el.input.addEventListener('keydown', (ev)=>{
-      if(ev.key==='Enter' && !ev.shiftKey){ ev.preventDefault(); sendMessage(); }
+    el.send.addEventListener("click", sendMessage);
+    el.input.addEventListener("keydown", (ev)=>{
+      if(ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); sendMessage(); }
     });
-    el.input.addEventListener('input', autosize);
+    el.input.addEventListener("input", autosize);
 
-    el.toneSwitch.addEventListener('change', ()=>{
-      tone = el.toneSwitch.checked ? 'formale' : 'informale';
-      el.toneLabel.textContent = el.toneSwitch.checked ? 'Formale' : 'Informale';
-      localStorage.setItem('tone', tone);
+    el.toneSwitch.addEventListener("change", ()=>{
+      tone = el.toneSwitch.checked ? "formale" : "informale";
+      el.toneLabel.textContent = el.toneSwitch.checked ? "Formale" : "Informale";
+      localStorage.setItem("tone", tone);
       showToast(`Tono: ${tone}`);
+      // (opzionale) per attivare tema chiaro/scuro sulla UI:
+      // document.documentElement.setAttribute("data-theme", el.toneSwitch.checked ? "light" : "dark");
     });
   </script>
 </body>
