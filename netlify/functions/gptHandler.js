@@ -1,12 +1,6 @@
-import { OpenAI } from "openai";
-
-// Funzione Netlify: inoltra ai Assistants
-// - Assistant ID da OPENAI_ASSISTANT_ID
-// - Usa `behavior` come additional_instructions
-// - Pre-inietta `[SINTESI CONVERSAZIONE]` se ricevuta da client
-// - Thread persistente, CORS, timeout
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// netlify/functions/gptHandler.js
+// Env richieste su Netlify: OPENAI_API_KEY, OPENAI_ASSISTANT_ID
+import OpenAI from "openai";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -14,7 +8,31 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
+/* stessa sanitizzazione lato server: così la risposta è pulita ovunque */
+function sanitizeReply(text) {
+  let s = String(text || "");
+
+  // [1][2], [6:qualcosa], note [^1]
+  s = s.replace(/(\s*`?\[\d+(?::[^\]]+)?\]`?)+/g, "");
+  s = s.replace(/\s*\[\^[^\]]+\]/g, "");
+
+  // markdown [titolo](url) -> titolo
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
+
+  // rimuovi backtick inline/blocks
+  s = s.replace(/`{1,3}([^`]+)`{1,3}/g, "$1");
+
+  // parentesi/brackets vuoti + spazi
+  s = s.replace(/\s*[\(\[\{]\s*[\)\]\}]\s*/g, "");
+  s = s.replace(/\s{2,}/g, " ").replace(/\s+([,.;:!?])/g, "$1").trim();
+
+  return s;
+}
+
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
 export async function handler(event) {
+  // CORS / ping
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers: CORS, body: "" };
   }
@@ -34,9 +52,9 @@ export async function handler(event) {
     const userText = (body.message || "").toString().trim();
     let threadId = (body.threadId || "").toString() || null;
 
-    const behavior = (body.behavior || "").toString();  // istruzioni runtime (tono)
-    const tone = (body.tone || "").toString();          // opzionale (telemetria)
-    const summary = (body.summary || "").toString();    // sintesi chat dal client
+    const behavior = (body.behavior || "").toString();
+    const tone = (body.tone || "").toString();
+    const summary = (body.summary || "").toString(); // vuoto nel client
 
     if (!userText) {
       return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "message vuoto" }) };
@@ -44,48 +62,47 @@ export async function handler(event) {
 
     // 1) Thread
     if (!threadId) {
-      const thread = await openai.beta.threads.create();
+      const thread = await client.beta.threads.create();
       threadId = thread.id;
     }
 
-    // 2) Inietta sintesi come messaggio utente (contestualizzazione leggera, mai file/fonte)
+    // 2) (opzionale) inietta sintesi
     if (summary) {
-      await openai.beta.threads.messages.create(threadId, {
+      await client.beta.threads.messages.create(threadId, {
         role: "user",
-        content: `[SINTESI CONVERSAZIONE]: ${summary}`
+        content: `[SINTESI CONVERSAZIONE]\n${summary}`
       });
     }
 
     // 3) Messaggio utente
-    await openai.beta.threads.messages.create(threadId, {
+    await client.beta.threads.messages.create(threadId, {
       role: "user",
-      content: userText,
-      metadata: tone ? { tone } : undefined
+      content: userText
     });
 
-    // 4) Run
-    let run = await openai.beta.threads.runs.create(threadId, {
+    // 4) Run con istruzioni addizionali
+    let run = await client.beta.threads.runs.create(threadId, {
       assistant_id: process.env.OPENAI_ASSISTANT_ID,
-      additional_instructions: behavior || undefined
+      additional_instructions: behavior,
+      metadata: { tone }
     });
 
-    // 5) Poll fino a 55s
+    // 5) Poll semplice (max ~55s — adatto a Netlify)
     const start = Date.now();
     const timeoutMs = 55000;
-    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
     while (["queued","in_progress","requires_action","cancelling"].includes(run.status)) {
       if (Date.now() - start > timeoutMs) throw new Error("Timeout run");
-      await sleep(1000);
-      run = await openai.beta.threads.runs.retrieve(threadId, run.id);
+      await new Promise(r => setTimeout(r, 1000));
+      run = await client.beta.threads.runs.retrieve(threadId, run.id);
     }
 
-    // 6) Estrai risposta
-    const list = await openai.beta.threads.messages.list(threadId, { limit: 10, order: "desc" });
+    // 6) Estrai l’ultima risposta dell’assistente
+    const list = await client.beta.threads.messages.list(threadId, { limit: 10, order: "desc" });
     const assistantMsg = list.data.find(m => m.role === "assistant");
-    const reply =
-      assistantMsg?.content?.find?.(c => c.type === "text")?.text?.value
+    let reply = assistantMsg?.content?.find?.(c => c.type === "text")?.text?.value
       || `Run terminata con stato: ${run.status}`;
+
+    reply = sanitizeReply(reply);
 
     return {
       statusCode: 200,
@@ -96,7 +113,7 @@ export async function handler(event) {
   } catch (err) {
     console.error("SERVER ERROR:", err);
     return {
-      statusCode: 200,
+      statusCode: 200, // 200 per non far scattare errori CORS lato client
       headers: { ...CORS, "Content-Type": "application/json" },
       body: JSON.stringify({
         reply: "Errore temporaneo dal server. Riprova tra qualche secondo.",
