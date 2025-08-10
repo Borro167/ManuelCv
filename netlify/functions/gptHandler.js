@@ -8,31 +8,21 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-/* stessa sanitizzazione lato server: così la risposta è pulita ovunque */
+/* stessa pulizia anche lato server */
 function sanitizeReply(text) {
   let s = String(text || "");
-
-  // [1][2], [6:qualcosa], note [^1]
-  s = s.replace(/(\s*`?\[\d+(?::[^\]]+)?\]`?)+/g, "");
-  s = s.replace(/\s*\[\^[^\]]+\]/g, "");
-
-  // markdown [titolo](url) -> titolo
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
-
-  // rimuovi backtick inline/blocks
-  s = s.replace(/`{1,3}([^`]+)`{1,3}/g, "$1");
-
-  // parentesi/brackets vuoti + spazi
-  s = s.replace(/\s*[\(\[\{]\s*[\)\]\}]\s*/g, "");
+  s = s.replace(/(\s*`?\[\d+(?::[^\]]+)?\]`?)+/g, ""); // [1][2] / [6:qualcosa]
+  s = s.replace(/\s*\[\^[^\]]+\]/g, "");                // [^1]
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");      // [titolo](url) -> titolo
+  s = s.replace(/`{1,3}([^`]+)`{1,3}/g, "$1");          // backtick
+  s = s.replace(/\s*[\(\[\{]\s*[\)\]\}]\s*/g, "");      // parentesi vuote
   s = s.replace(/\s{2,}/g, " ").replace(/\s+([,.;:!?])/g, "$1").trim();
-
   return s;
 }
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function handler(event) {
-  // CORS / ping
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers: CORS, body: "" };
   }
@@ -80,14 +70,14 @@ export async function handler(event) {
       content: userText
     });
 
-    // 4) Run con istruzioni addizionali
+    // 4) Run
     let run = await client.beta.threads.runs.create(threadId, {
       assistant_id: process.env.OPENAI_ASSISTANT_ID,
       additional_instructions: behavior,
       metadata: { tone }
     });
 
-    // 5) Poll semplice (max ~55s — adatto a Netlify)
+    // 5) Poll (entro ~55s per Netlify)
     const start = Date.now();
     const timeoutMs = 55000;
     while (["queued","in_progress","requires_action","cancelling"].includes(run.status)) {
@@ -96,7 +86,7 @@ export async function handler(event) {
       run = await client.beta.threads.runs.retrieve(threadId, run.id);
     }
 
-    // 6) Estrai l’ultima risposta dell’assistente
+    // 6) Estrai risposta
     const list = await client.beta.threads.messages.list(threadId, { limit: 10, order: "desc" });
     const assistantMsg = list.data.find(m => m.role === "assistant");
     let reply = assistantMsg?.content?.find?.(c => c.type === "text")?.text?.value
@@ -113,7 +103,7 @@ export async function handler(event) {
   } catch (err) {
     console.error("SERVER ERROR:", err);
     return {
-      statusCode: 200, // 200 per non far scattare errori CORS lato client
+      statusCode: 200,
       headers: { ...CORS, "Content-Type": "application/json" },
       body: JSON.stringify({
         reply: "Errore temporaneo dal server. Riprova tra qualche secondo.",
