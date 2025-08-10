@@ -42,12 +42,6 @@
     .msg.me{align-self:flex-end;background:linear-gradient(135deg,#20305f,#273a75)}
     .msg.bot{align-self:flex-start;background:linear-gradient(135deg,#121a32,#101527)}
     .meta{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:.82em;margin-top:6px}
-    .typing{width:54px;display:flex;gap:6px}
-    .typing i{width:8px;height:8px;border-radius:50%;background:#c9d2f5;opacity:.6;animation:bump 1s infinite}
-    .typing i:nth-child(2){animation-delay:.15s}
-    .typing i:nth-child(3){animation-delay:.3s}
-    @keyframes bump{0%{transform:translateY(0)}50%{transform:translateY(-4px)}100%{transform:translateY(0)}}
-    @keyframes pop{from{transform:translateY(4px);opacity:.0}to{transform:translateY(0);opacity:1}}
     .composer{position:sticky;bottom:0;z-index:15;padding:12px var(--pad) calc(12px + env(safe-area-inset-bottom));background:linear-gradient(0deg, var(--surface-2), transparent);backdrop-filter: blur(10px);border-top:var(--border)}
     .row{max-width:980px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
     textarea{flex:1;min-height:48px;max-height:33dvh;resize:none;padding:12px 14px;border-radius:16px;border:var(--border);background:rgba(255,255,255,.03);color:var(--text);outline:none}
@@ -84,33 +78,28 @@
 
   <script>
 "use strict";
-
-// pulizia storage per test
-try { localStorage.removeItem("history"); localStorage.removeItem("threadId"); } catch {}
-
 const el = {
   messages: document.getElementById("messages"),
   input: document.getElementById("input"),
   send: document.getElementById("send"),
   netDot: document.getElementById("netDot"),
-  netText: document.getElementById("netText"),
+  netText: document.getElementById("netText")
 };
 
 let threadId = null;
-
 const nowTime = () => new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
 
-// ESCAPE totale (niente HTML in chat)
+// HTML escape totale
 function escapeText(s){ return String(s).replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
 
-// sanifica citazioni/footnote/link man mano che arrivano
-function sanitizeProgressive(text){
+// rimozione citazioni/link visibili
+function cleanChat(text){
   let s = String(text || "");
-  s = s.replace(/[【〔][^】〕]*[】〕]/g, ""); // footnotes stile "[1†…]"
+  s = s.replace(/[【〔][^】〕]*[】〕]/g, "");
   s = s.replace(/(?:\s*`?\[(?:\^\w+|\d+(?::[^\]]+)?|[^\]]{1,120}\.(?:pdf|docx?|xlsx?|pptx?|txt|md|png|jpe?g|webp|svg))\]`?)+/gi, "");
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1"); // link md -> testo
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
   s = s.replace(/<https?:\/\/[^>\s]+>/gi, "");
-  s = s.replace(/`{1,3}([\s\S]*?)`{1,3}/g, "$1"); // backtick
+  s = s.replace(/`{1,3}([\s\S]*?)`{1,3}/g, "$1");
   s = s.replace(/\s*[\(\[\{]\s*[\)\]\}]\s*/g, "");
   s = s.replace(/\s{2,}/g, " ").replace(/\s+([,.;:!?])/g, "$1");
   return s;
@@ -120,17 +109,17 @@ function getBehavior(){
   return [
     "Parla chiaro e sintetico.",
     "Punto chiave subito, poi dettagli.",
-    "Nessun link o citazione visibile in chat.",
+    "Niente link o citazioni in chiaro.",
     "Coerente col ruolo di assistente di Manuel.",
     "Non inventare dati."
   ].join("\n");
 }
 
 function introText(){
-  return "Ciao! Sono l’assistente di Manuel. Rispondo in modo chiaro e breve, senza link o citazioni visibili. Come posso aiutarti?";
+  return "Ciao! Sono l’assistente di Manuel. Risposte brevi e senza link/citazioni visibili. Come posso aiutarti?";
 }
 
-// UI helpers
+// UI
 function addBubble(role, text){
   const wrap = document.createElement("div");
   wrap.className = `msg ${role==="user"?"me":"bot"}`;
@@ -143,7 +132,6 @@ function addBubble(role, text){
   el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
   return wrap;
 }
-
 function addStreamingBubble(){
   const wrap = document.createElement("div");
   wrap.className = "msg bot";
@@ -157,6 +145,32 @@ function addStreamingBubble(){
   el.messages.appendChild(wrap);
   el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
   return { wrap, txt, meta };
+}
+
+// parsers: accetta sia JSON line-by-line sia SSE "data: {...}"
+function extractTextDelta(evt){
+  // supporta diversi formati evento (Assistants/Responses)
+  const e = evt?.event || evt?.type;
+  const data = evt?.data || evt;
+
+  // 1) Assistants v2: thread.message.delta -> data.delta.content[].text.value
+  if (e === "thread.message.delta" || e === "message.delta") {
+    let out = "";
+    const parts = data?.delta?.content || [];
+    for (const p of parts) {
+      // output_text / input_text / text
+      if (p?.text?.value) out += p.text.value;
+      else if (typeof p?.text === "string") out += p.text;
+    }
+    return out;
+  }
+
+  // 2) Responses API: response.output_text.delta -> data.delta
+  if (e === "response.output_text.delta") {
+    return data?.delta ?? "";
+  }
+
+  return "";
 }
 
 async function ping(){
@@ -174,15 +188,12 @@ async function sendMessage(){
   const text = (el.input.value || "").trim();
   if(!text) return;
 
-  // utente
   addBubble("user", text);
   el.input.value = "";
   el.send.disabled = true;
 
-  // bolla streaming
   const streamUI = addStreamingBubble();
 
-  // prepara richiesta
   const payload = {
     message: text,
     threadId,
@@ -191,45 +202,59 @@ async function sendMessage(){
   };
 
   try{
-    // fetch con risposta STREAM (text/plain) + fallback JSON
     const res = await fetch("/.netlify/functions/gptHandler", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "text/plain" },
+      headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
       body: JSON.stringify(payload)
     });
 
-    // stato rete
     el.netDot.style.background = res.ok ? "var(--ok)" : "var(--warn)";
     el.netText.textContent = res.ok ? "online" : `errore ${res.status}`;
 
-    // salva eventuale nuovo thread id dall'header
     const hdrTid = res.headers.get("x-thread-id");
     if (!threadId && hdrTid) threadId = hdrTid;
 
     const ctype = (res.headers.get("Content-Type") || "").toLowerCase();
 
-    if (res.ok && ctype.startsWith("text/")) {
-      // ---- STREAM LETTERA PER LETTERA ----
+    if (res.ok && res.body && (ctype.includes("event-stream") || ctype.includes("text"))) {
+      // STREAM DI EVENTI -> mostriamo solo le parti di testo
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let raw = "";
+      let buf = "";
+      let full = "";
 
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        raw += decoder.decode(value, { stream: true });
+        buf += decoder.decode(value, { stream: true });
 
-        // sanifica progressivamente e mostra tutto il testo (tipo "macchina da scrivere")
-        const clean = sanitizeProgressive(raw);
-        streamUI.txt.textContent = clean;
-        el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
+        // split per linee; teniamo l'ultima (potrebbe essere incompleta)
+        const lines = buf.split(/\r?\n/);
+        buf = lines.pop() || "";
+
+        for (let line of lines) {
+          line = line.trim();
+          if (!line) continue;
+          if (line.startsWith("data:")) line = line.slice(5).trim();
+          if (line === "[DONE]") continue;
+
+          try {
+            const evt = JSON.parse(line);
+            const delta = extractTextDelta(evt);
+            if (delta) {
+              full += delta;
+              streamUI.txt.textContent = cleanChat(full);
+              el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
+            }
+          } catch { /* ignora frammenti non JSON */ }
+        }
       }
       streamUI.meta.textContent = nowTime();
     } else {
-      // ---- FALLBACK JSON (nessuno stream) ----
+      // FALLBACK non-stream (JSON)
       const data = await res.json().catch(()=>({}));
       const reply = data?.reply || "Nessuna risposta ricevuta.";
-      streamUI.txt.textContent = sanitizeProgressive(reply);
+      streamUI.txt.textContent = cleanChat(reply);
       streamUI.meta.textContent = nowTime();
       if (!threadId && data?.threadId) threadId = data.threadId;
     }
@@ -245,13 +270,13 @@ async function sendMessage(){
   }
 }
 
-// UX minime
+// UX
 function autosize(){ el.input.style.height="auto"; const maxPx=Math.round(window.innerHeight*0.33); el.input.style.height=Math.min(el.input.scrollHeight,maxPx)+"px"; }
 el.send.addEventListener("click", sendMessage);
 el.input.addEventListener("keydown", (ev)=>{ if(ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); sendMessage(); } });
 el.input.addEventListener("input", autosize);
 
-// intro + ping
+// avvio
 addBubble("assistant", introText());
 autosize();
 ping();
