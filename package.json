@@ -1,9 +1,14 @@
 {
-  "name": "manuel-chat-assistant",
-  "version": "4.1.0",
+  "name": "manuel-chat-netlify",
   "private": true,
   "type": "module",
-  "dependencies": {
-    "openai": "^4.58.1"
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "echo 'static site'",
+    "start": "netlify dev"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.34.0"
   }
 }
