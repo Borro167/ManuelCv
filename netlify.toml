@@ -1,7 +1,7 @@
 [build]
-  publish = "."
+  publish = "public"
   functions = "netlify/functions"
 
 [functions]
   node_bundler = "esbuild"
-  # RIMOSSO: external_node_modules
+  external_node_modules = ["openai"]
