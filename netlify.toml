@@ -1,18 +1,7 @@
 [build]
-  publish = "public"
+  publish = "."
   functions = "netlify/functions"
 
-# Proxy friendly path: /api/* -> Netlify Functions
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-
-# Basic security headers
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Content-Type-Options = "nosniff"
-    X-Frame-Options = "SAMEORIGIN"
-    Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "camera=(), microphone=()"
+[functions]
+  node_bundler = "esbuild"
+  # RIMOSSO: external_node_modules
