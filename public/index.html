@@ -1,207 +1,259 @@
 <!doctype html>
-<html lang="it">
+<html lang="it" data-theme="dark">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Manuel • AI Interview</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="color-scheme" content="dark light" />
+  <title>Assistente di Manuel — Chat</title>
   <style>
     :root{
-      --bg:#0d1220;
-      --card:#131934;
-      --muted:#9aa4bf;
-      --text:#e6ebff;
-      --accent:#6aa1ff;
-      --pad:16px;
-      --radius:18px;
-      --kb:0px; /* set via JS (VisualViewport) */
+      --bg:#0b0f1a;--bg-grad-1:#0b0f1a;--bg-grad-2:#121a2f;
+      --surface:#0f1629cc;--surface-2:#121a2fcc;--card:#131c37aa;
+      --text:#e9eefc;--muted:#aab3cd;--primary:#86a6ff;--accent:#b38bff;
+      --ok:#35d39e;--warn:#ffb64d;--border:1px solid rgba(255,255,255,.08);
+      --shadow:0 10px 40px rgba(0,0,0,.55);--pad:clamp(12px,2vw,20px)
     }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:16px/1.4 system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-    .wrap{
-      height:100dvh;min-height:100svh;display:flex;flex-direction:column;
-      padding:calc(env(safe-area-inset-top)) calc(env(safe-area-inset-left)) calc(env(safe-area-inset-bottom));
+    :root[data-theme="light"]{
+      --bg:#f7f8ff;--bg-grad-1:#f7f8ff;--bg-grad-2:#e9ecff;
+      --surface:#ffffffcc;--surface-2:#ffffffee;--card:#ffffffcc;
+      --text:#0b0f1a;--muted:#4a5470;--border:1px solid rgba(0,0,0,.08);
+      --shadow:0 12px 36px rgba(0,0,0,.10)
     }
-    header{padding:12px var(--pad);font-weight:600;opacity:.9}
+    *{box-sizing:border-box} html,body{height:100%;margin:0}
+    body{
+      font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial;
+      color:var(--text);
+      background:
+        radial-gradient(1200px 800px at 10% -10%, #23326b44, transparent),
+        radial-gradient(1000px 600px at 100% 0%, #5b3cc744, transparent),
+        linear-gradient(160deg, var(--bg-grad-1), var(--bg-grad-2));
+      overflow:hidden;
+    }
+    .wrap{height:100dvh;display:grid;grid-template-rows:auto 1fr auto;}
+    .header{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px var(--pad);background:linear-gradient(180deg, var(--surface), transparent);border-bottom:var(--border)}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));color:#0b0f1a;font-weight:900;box-shadow:var(--shadow)}
+    .title{font-weight:700;letter-spacing:.2px}
+    .status{display:flex;align-items:center;gap:8px;font-size:.95em;color:var(--muted)}
+    .dot{width:10px;height:10px;border-radius:999px;background:var(--warn);box-shadow:0 0 0 2px #0002}
     .chat{
-      flex:1;min-height:0;
-      overflow:auto; -webkit-overflow-scrolling:touch;
-      scrollbar-width:none; -ms-overflow-style:none;
-      overscroll-behavior:contain; touch-action:pan-y;
-      padding:8px var(--pad) 4px;
-    }
+  
+max-width:980px;
+  margin:0 auto;
+  padding:16px var(--pad);
+  overflow:auto;
+  min-height:0;                    /* allow shrinking inside CSS grid */
+  -webkit-overflow-scrolling:touch;/* smoother mobile scroll */
+  scrollbar-width:none;            /* Firefox: hide bar */
+  -ms-overflow-style:none;         /* IE/Edge legacy: hide bar */
+  overscroll-behavior:contain;     /* don't scroll body at list ends */
+}
+    .msgs{display:flex;flex-direction:column;gap:12px;padding-bottom:24px}
+    .msg{max-width:min(780px, 90%);padding:12px 14px;border-radius:16px;background:linear-gradient(180deg,#0f1629cc,#0f1629cc);border:var(--border);box-shadow:var(--shadow);animation:pop .15s ease;white-space:pre-wrap}
+    .msg.me{align-self:flex-end;background:linear-gradient(135deg,#20305f,#273a75)}
+    .msg.bot{align-self:flex-start;background:linear-gradient(135deg,#121a32,#101527)}
+    .meta{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:.82em;margin-top:6px}
+    .composer{position:sticky;bottom:0;z-index:15;padding:12px var(--pad) calc(12px + env(safe-area-inset-bottom) + var(--kb,0px));background:linear-gradient(180deg, transparent, rgba(0,0,0,.25), var(--surface));backdrop-filter: blur(10px)}
+    .row{max-width:980px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
+    textarea{flex:1;min-height:56px;max-height:45dvh;resize:none;padding:12px 14px;border-radius:14px;border:var(--border);font-size:16px;line-height:1.35;background:rgba(255,255,255,.03);color:var(--text);outline:none}
+    .btn{height:48px;display:inline-flex;align-items:center;gap:10px;padding:0 16px;border-radius:14px;border:none;cursor:pointer;font-weight:700;color:#0b0f1a;background:linear-gradient(135deg,var(--primary),var(--accent));box-shadow:var(--shadow)}
+    .btn[disabled]{opacity:.7;cursor:wait}
+    @media (max-width:720px){.msg{max-width:92%}}
+    @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
     .chat::-webkit-scrollbar{width:0;height:0}
-    .msg{max-width:760px;margin:8px 0;display:flex;gap:10px;align-items:flex-end}
-    .msg .bubble{
-      padding:12px 14px;border-radius:16px; background:var(--card);
-      box-shadow:0 4px 12px rgba(0,0,0,.25);
-      white-space:pre-wrap; word-wrap:break-word; overflow-wrap:anywhere;
-    }
-    .msg.me{justify-content:flex-end}
-    .msg.me .bubble{background:#243159}
-    .time{font-size:11px;color:var(--muted);margin:0 6px 2px}
-    .composer{
-      position:sticky;bottom:0;left:0;right:0;
-      padding:12px var(--pad) calc(12px + env(safe-area-inset-bottom) + var(--kb));
-      background:linear-gradient(180deg, rgba(13,18,32,0) 0%, rgba(13,18,32,.85) 30%, rgba(13,18,32,1) 60%);
-      backdrop-filter:saturate(1.2) blur(6px);
-    }
-    .row{
-      display:grid; grid-template-columns:1fr auto; gap:10px; align-items:end;
-      max-width:960px; margin:0 auto;
-    }
-    textarea{
-      resize:none; width:100%; min-height:56px; max-height:45dvh;
-      background:var(--card); color:var(--text); border:none; outline:none;
-      padding:12px 14px; border-radius:var(--radius);
-      line-height:1.35; font-size:16px; /* evita zoom iOS */
-      box-shadow:inset 0 0 0 1px rgba(255,255,255,.04);
-    }
-    button{
-      height:56px; padding:0 18px; border-radius:var(--radius); border:none;
-      background:var(--accent); color:white; font-weight:600; cursor:pointer;
-      box-shadow:0 6px 18px rgba(106,161,255,.35);
-    }
-    button[disabled]{opacity:.6;cursor:not-allowed}
-    @media (max-width:640px){
-      header{padding:10px var(--pad) 4px}
-      .msg .bubble{font-size:15px}
-      .row{align-items:stretch}
-      button{height:52px}
-      textarea{min-height:52px}
-    }
-    @media (prefers-reduced-motion:no-preference){
-      .msg .bubble{transition:transform .2s ease, opacity .2s ease}
-      .msg.appear .bubble{transform:translateY(6px); opacity:0}
-      .msg.show .bubble{transform:none; opacity:1}
-    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <header>Manuel · Simulatore colloquio</header>
-    <main class="chat" id="chat" aria-live="polite">
-      <!-- messaggi -->
-    </main>
-    <form class="composer" id="composer">
-      <div class="row">
-        <textarea id="input" placeholder="Scrivi e premi Invio… (Shift+Invio va a capo)" autocomplete="off"></textarea>
-        <button id="send" type="submit">Invia</button>
+    <header class="header">
+      <div class="brand">
+        <div class="logo">M</div>
+        <div class="title">Assistente di Manuel</div>
       </div>
-    </form>
+      <div class="status" title="Stato server">
+        <span class="dot" id="netDot"></span>
+        <span id="netText">controllo…</span>
+      </div>
+    </header>
+
+    <main class="chat" aria-live="polite">
+      <div class="msgs" id="messages"></div>
+    </main>
+
+    <footer class="composer">
+      <div class="row">
+        <textarea id="input" placeholder="Scrivi e premi Invio… (Shift+Invio va a capo)" autocapitalize="sentences"></textarea>
+        <button class="btn" id="send" type="button">Invia</button>
+      </div>
+    </footer>
   </div>
 
-  <script type="module">
-    const ui = {
-      chat: document.getElementById('chat'),
-      form: document.getElementById('composer'),
-      input: document.getElementById('input'),
-      send:  document.getElementById('send')
-    };
+  <script>
+const el = {
+  messages: document.getElementById("messages"),
+  input: document.getElementById("input"),
+  send: document.getElementById("send"),
+  netDot: document.getElementById("netDot"),
+  netText: document.getElementById("netText")
+};
+// Mobile keyboard-aware layout (VisualViewport)
+const vv = window.visualViewport;
+function nearBottom(){
+  const box = el.messages.parentElement;
+  return (box.scrollHeight - box.scrollTop - box.clientHeight) < 80;
+}
+function fitViewport(){
+  if(!vv) return;
+  const kb = Math.max(0, window.innerHeight - vv.height);
+  document.documentElement.style.setProperty('--kb', kb + 'px');
+  if (nearBottom()) { const box = el.messages.parentElement; box.scrollTop = box.scrollHeight; }
+}
+if (vv){
+  vv.addEventListener('resize', fitViewport);
+  vv.addEventListener('scroll', fitViewport);
+  fitViewport();
+}
 
-    // --- VisualViewport: adatta alza composer quando appare la tastiera ---
-    const vv = window.visualViewport;
-    function fitViewport(){
-      if(!vv) return;
-      const kb = Math.max(0, window.innerHeight - vv.height);
-      document.documentElement.style.setProperty('--kb', kb + 'px');
-      // se sei vicino al fondo, resta ancorato
-      if (isNearBottom()) scrollToBottom();
-    }
-    if (vv){
-      vv.addEventListener('resize', fitViewport);
-      vv.addEventListener('scroll', fitViewport);
-      fitViewport();
-    }
+// helpers
+function nowTime(){ const d=new Date(); return d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
+function cleanChat(s){ return String(s).replace(/\n{3,}/g, "\n\n"); }
+function escapeText(s){ return String(s).replace(/[&<>"']/g, (c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
 
-    // --- Autoresize textarea
-    function autoresize(){
-      ui.input.style.height = 'auto';
-      ui.input.style.height = Math.min(ui.input.scrollHeight, window.innerHeight * 0.45) + 'px';
-    }
-    ui.input.addEventListener('input', autoresize);
-    ui.input.addEventListener('focus', () => setTimeout(scrollToBottom, 0));
-    autoresize();
+// ping server status (facoltativo)
+async function ping(){
+  try{
+    const res = await fetch('/.netlify/functions/health');
+    if (res.ok){ el.netDot.style.background = 'var(--ok)'; el.netText.textContent = 'online'; }
+    else { throw new Error('offline'); }
+  }catch{ el.netDot.style.background = 'var(--warn)'; el.netText.textContent = 'non raggiungibile'; }
+}
 
-    // --- Messaggi UI
-    function addMsg(text, who='ai'){
-      const wrap = document.createElement('div');
-      wrap.className = 'msg ' + (who==='me' ? 'me' : '');
-      wrap.innerHTML = '<div class="bubble"></div>';
-      const bubble = wrap.querySelector('.bubble');
-      bubble.textContent = text;
-      wrap.classList.add('appear');
-      ui.chat.appendChild(wrap);
-      requestAnimationFrame(() => wrap.classList.add('show'));
-      if(isNearBottom()) scrollToBottom();
-      return bubble;
-    }
-    function isNearBottom(){
-      return (ui.chat.scrollHeight - ui.chat.scrollTop - ui.chat.clientHeight) < 80;
-    }
-    function scrollToBottom(){
-      ui.chat.scrollTop = ui.chat.scrollHeight;
-    }
+// UI
+function addBubble(role, text){
+  const wrap = document.createElement("div");
+  wrap.className = "msg " + (role === 'user' ? 'me' : 'bot');
+  wrap.textContent = text;
+  el.messages.appendChild(wrap);
+  if (nearBottom()) { const box = el.messages.parentElement; box.scrollTop = box.scrollHeight; }
+}
 
-    // --- Intro non invasiva
-    function introText(){
-      return "Ciao! Sono l’assistente-recruiter di Manuel. Ti farò domande su ruolo, progetti ed esperienza e ti darò feedback sintetici. Indica ruolo target (es. Mechanical Engineer), livello (junior/mid/senior) e lingua: adatto subito il colloquio.";
-    }
-    addMsg(introText(), 'ai');
+function addBotStream(){
+  const wrap = document.createElement("div");
+  wrap.className = "msg bot";
+  const txt = document.createElement("div");
+  txt.textContent = "";
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = "…";
+  wrap.appendChild(txt);
+  wrap.appendChild(meta);
+  el.messages.appendChild(wrap);
+  el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
+  return { wrap, txt, meta };
+}
 
-    // --- Invio
-    ui.form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const text = ui.input.value.trim();
-      if(!text) return;
-      addMsg(text, 'me');
-      ui.input.value='';
-      autoresize();
-      await streamChat(text);
+// parsers: accetta sia JSON line-by-line sia SSE "data: {...}"
+function extractTextDelta(evt){
+  // supporta diversi formati evento (Assistants/Responses)
+  const e = evt?.event || evt?.type;
+  const data = evt?.data || evt;
+
+  // 1) Assistants v2: thread.message.delta -> data.delta.content[].text.value
+  if (e === "thread.message.delta" || e === "message.delta") {
+    let out = "";
+    const parts = data?.delta?.content || [];
+    for (const p of parts) {
+      // output_text / input_text / text
+      if (p?.text?.value) out += p.text.value;
+      else if (typeof p?.text === "string") out += p.text;
+    }
+    return out;
+  }
+  // 2) Responses API: response.output_text.delta -> data.delta
+  if (e === "response.output_text.delta" && typeof data?.delta === "string") return data.delta;
+  // 3) Fallback plain string
+  if (typeof evt === "string") return evt;
+  return "";
+}
+
+// invio messaggio
+async function sendMessage(){
+  const text = el.input.value.trim();
+  if(!text) return;
+  addBubble('user', text);
+  el.input.value = ""; autosize();
+
+  const streamUI = addBotStream();
+  el.send.disabled = true;
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text })
     });
 
-    async function streamChat(userText){
-      ui.send.disabled = true;
-      const placeholder = addMsg('…', 'ai');
-
-      try{
-        const res = await fetch('/api/chat', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json' },
-          body: JSON.stringify({ message: userText })
-        });
-
-        if(!res.ok || !res.body){
-          throw new Error('Connessione non valida');
-        }
-
-        // Leggi EventStream "data: <chunk>\n\n" dal backend
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder('utf-8');
-        let buffer = '', done, value;
-
-        placeholder.textContent = ''; // svuota
-        while(({done,value} = await reader.read()) && !done){
-          buffer += decoder.decode(value, {stream:true});
-          let idx;
-          // Gestione eventi SSE semplici: "data: ...\n\n"
-          while((idx = buffer.indexOf('\n\n')) >= 0){
-            const raw = buffer.slice(0, idx).trim();
-            buffer = buffer.slice(idx + 2);
-            if(raw.startsWith('data:')){
-              const chunk = raw.slice(5).trim();
-              if (chunk === '[DONE]') { break; }
-              placeholder.textContent += chunk;
-              if(isNearBottom()) scrollToBottom();
+    if (res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '', full = '';
+      while(true){
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, {stream:true});
+        let idx;
+        while((idx = buffer.indexOf('\n\n')) >= 0){
+          const raw = buffer.slice(0, idx).trim();
+          buffer = buffer.slice(idx + 2);
+          if(!raw.startsWith('data:')) continue;
+          const payload = raw.slice(5).trim();
+          if(payload === '[DONE]') break;
+          try {
+            const evt = JSON.parse(payload);
+            const delta = extractTextDelta(evt);
+            if (delta){
+              full += delta;
+              streamUI.txt.textContent = cleanChat(full);
+              el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
             }
+          } catch {
+            // potrebbe essere testo grezzo
+            streamUI.txt.textContent += payload;
+            el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
           }
         }
-      }catch(err){
-        console.error(err);
-        addMsg('Errore di connessione. Riprova.', 'ai');
-      }finally{
-        ui.send.disabled = false;
       }
+      streamUI.meta.textContent = nowTime();
+    } else {
+      // FALLBACK non-stream (JSON)
+      const data = await res.json().catch(()=>({}));
+      const reply = data?.reply || "Nessuna risposta ricevuta.";
+      streamUI.txt.textContent = cleanChat(reply);
+      streamUI.meta.textContent = nowTime();
     }
+  } catch (err) {
+    streamUI.txt.textContent = "Errore di connessione. Riprova tra poco.";
+    streamUI.meta.textContent = nowTime();
+    el.netDot.style.background = "var(--warn)";
+    el.netText.textContent = "non raggiungibile";
+    console.error(err);
+  } finally {
+    el.send.disabled = false;
+    el.input.focus();
+  }
+}
+
+// UX
+function autosize(){ el.input.style.height="auto"; const maxPx=Math.round(window.innerHeight*0.45); el.input.style.height=Math.min(el.input.scrollHeight,maxPx)+"px"; }
+el.send.addEventListener("click", sendMessage);
+el.input.addEventListener("keydown", (ev)=>{ if(ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); sendMessage(); } });
+el.input.addEventListener("input", autosize);
+
+// avvio
+addBubble("assistant", "Ciao! Sono l’assistente-recruiter di Manuel. Iniziamo: dimmi ruolo target (es. Mechanical Engineer), livello (junior/mid/senior) e lingua del colloquio.");
+autosize();
+ping();
+setInterval(ping, 15000);
   </script>
 </body>
 </html>
