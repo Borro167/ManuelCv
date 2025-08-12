@@ -20,7 +20,6 @@
       --ok:#0a8f62;--warn:#b86b00;--border:1px solid rgba(0,0,0,.1)
     }
 
-    /* ---- RESET (scoped to app) ---- */
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
     body{font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial; color:var(--text);
@@ -28,10 +27,9 @@
         radial-gradient(1200px 800px at 10% -10%, #23326b44, transparent),
         radial-gradient(1000px 600px at 100% 0%, #5b3cc744, transparent),
         linear-gradient(160deg, var(--bg), var(--bg2));
-      overflow:hidden; /* niente scrollbar di pagina */
+      overflow:hidden; touch-action:manipulation;
     }
 
-    /* ---- APP LAYOUT ---- */
     #app{height:100dvh; display:grid; grid-template-rows:auto 1fr auto;}
 
     .header{position:sticky; top:0; z-index:10; display:flex; align-items:center; gap:12px;
@@ -46,7 +44,6 @@
     .dot{width:8px;height:8px;border-radius:99px;background:var(--ok);box-shadow:0 0 0 3px #35d39e22}
     .dot.warn{background:var(--warn);box-shadow:0 0 0 3px #ffb64d22}
 
-    /* ---- MESSAGES ---- */
     .messages{height:100%; padding:16px var(--pad) 12px; overflow:auto; scroll-behavior:smooth;
       -ms-overflow-style:none; scrollbar-width:none; overscroll-behavior:contain}
     .messages::-webkit-scrollbar{width:0;height:0}
@@ -57,24 +54,30 @@
     .assistant{align-self:flex-start; border-top-left-radius:6px}
     .user{align-self:flex-end; border-top-right-radius:6px; background:linear-gradient(135deg, #213bff66, #7c3cff66), var(--card)}
     .meta{opacity:.65; font-size:.8rem; margin-top:6px}
-    .thinking{opacity:.9; font-style:italic}
 
-    /* ---- COMPOSER ---- */
+    /* Typing indicator (3 pallini) */
+    .typing{display:inline-flex; gap:6px; align-items:center; margin-top:2px}
+    .typing span{width:6px;height:6px;border-radius:50%;background:var(--muted);opacity:.25;animation:blink 1.2s infinite ease-in-out}
+    .typing span:nth-child(2){animation-delay:.15s}
+    .typing span:nth-child(3){animation-delay:.3s}
+    @keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:.95}}
+
     .composer{position:sticky; bottom:0; padding:10px var(--pad) calc(env(safe-area-inset-bottom,0) + 10px);
       background:linear-gradient(0deg, var(--card2), transparent 50%); border-top:var(--border)}
     .row{max-width:980px; margin:0 auto; display:flex; gap:10px; align-items:flex-end}
     textarea{flex:1; min-height:44px; max-height:160px; padding:12px 14px; border-radius:14px; border:var(--border);
-      background:var(--card); color:var(--text); outline:none; resize:none; line-height:1.35; font-size:16px}
+      background:var(--card); color:var(--text); outline:none; resize:none; line-height:1.35; font-size:16px;
+      -ms-overflow-style:none; scrollbar-width:none}
+    textarea::-webkit-scrollbar{width:0;height:0}
     .send{flex:0 0 auto; height:44px; min-width:44px; padding:0 16px; border-radius:12px; border:none; cursor:pointer;
       background:linear-gradient(135deg, var(--primary), var(--accent)); color:white; font-weight:700; box-shadow:var(--shadow)}
     .send:disabled{opacity:.6; cursor:not-allowed}
 
-    /* ---- SMALL SCREENS ---- */
     @media (max-width: 640px){
       .bubble{max-width:92%}
       .title{font-size:1rem}
       .row{gap:8px}
-      textarea{font-size:16px} /* evita zoom su iOS */
+      textarea{font-size:16px}
     }
   </style>
 </head>
@@ -112,9 +115,28 @@
     statusText: document.getElementById('statusText')
   };
 
-  function addBubble(role, text = '', thinking=false){
+  function addBubble(role, text = '', thinking = false){
     const wrap = document.createElement('div');
     wrap.className = `bubble ${role}`;
+
+    const txt = document.createElement('div');
+    txt.className = 'txt';
+    if(text) txt.innerHTML = sanitize(text);
+    wrap.appendChild(txt);
+
+    if(thinking){
+      const t = document.createElement('div');
+      t.className = 'typing';
+      t.setAttribute('role','status');
+      t.setAttribute('aria-label','sta scrivendo');
+      t.innerHTML = '<span></span><span></span><span></span>';
+      wrap.appendChild(t);
+    }
+
+    els.stack.appendChild(wrap);
+    requestAnimationFrame(() => els.messages.scrollTo({top: els.messages.scrollHeight, behavior: 'smooth'}));
+    return wrap;
+  }`;
     wrap.innerHTML = `<div class="txt">${sanitize(text)}</div>` + (thinking? `<div class="meta thinking">sta scrivendo…</div>` : '');
     els.stack.appendChild(wrap);
     requestAnimationFrame(() => els.messages.scrollTo({top: els.messages.scrollHeight, behavior: 'smooth'}));
@@ -159,20 +181,20 @@
       const ctype = (res.headers.get('content-type') || '').toLowerCase();
       if(ctype.includes('text/event-stream')){
         await readSSE(res, chunk => {
-          botB.querySelector('.meta')?.remove();
+          botB.querySelector('.typing')?.remove();
           botB.querySelector('.txt').innerHTML += sanitize(chunk);
           els.messages.scrollTop = els.messages.scrollHeight;
         });
       } else if(ctype.includes('application/json')){
         const data = await res.json();
-        botB.querySelector('.meta')?.remove();
+        botB.querySelector('.typing')?.remove();
         botB.querySelector('.txt').innerHTML = sanitize(data.reply || data.error || 'Errore');
       } else {
-        botB.querySelector('.meta')?.remove();
+        botB.querySelector('.typing')?.remove();
         botB.querySelector('.txt').textContent = 'Errore di connessione: risposta inattesa.';
       }
     } catch (err){
-      botB.querySelector('.meta')?.remove();
+      botB.querySelector('.typing')?.remove();
       botB.querySelector('.txt').textContent = 'Non riesco a connettermi al server. Controlla la Function Netlify e le variabili (OPENAI_API_KEY).';
       setStatus(false);
     } finally {
