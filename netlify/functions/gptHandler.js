@@ -1,3 +1,4 @@
+// Web Runtime-style: restituiamo una Response con ReadableStream
 import OpenAI from "openai";
 
 const CORS = {
@@ -9,41 +10,74 @@ const CORS = {
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-export const handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: CORS, body: "" };
-  if (event.httpMethod !== "POST") {
-    return { statusCode: 405, headers: { ...CORS, "Content-Type": "application/json" }, body: JSON.stringify({ error: "Method Not Allowed" }) };
+export default async (req) => {
+  if (req.method === "OPTIONS") return new Response("", { status: 200, headers: CORS });
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
+      status: 405,
+      headers: { ...CORS, "Content-Type": "application/json" }
+    });
   }
 
-  if (!process.env.OPENAI_API_KEY)  return { statusCode: 500, headers: { ...CORS, "Content-Type": "application/json" }, body: JSON.stringify({ error: "OPENAI_API_KEY mancante" }) };
-  if (!process.env.OPENAI_ASSISTANT_ID) return { statusCode: 500, headers: { ...CORS, "Content-Type": "application/json" }, body: JSON.stringify({ error: "OPENAI_ASSISTANT_ID mancante" }) };
+  try {
+    if (!process.env.OPENAI_API_KEY) {
+      return new Response(JSON.stringify({ error: "OPENAI_API_KEY mancante" }), {
+        status: 500, headers: { ...CORS, "Content-Type": "application/json" }
+      });
+    }
+    if (!process.env.OPENAI_ASSISTANT_ID) {
+      return new Response(JSON.stringify({ error: "OPENAI_ASSISTANT_ID mancante" }), {
+        status: 500, headers: { ...CORS, "Content-Type": "application/json" }
+      });
+    }
 
-  const { message, threadId: incomingThreadId, behavior } = JSON.parse(event.body || "{}");
-  const userText = String(message || "").trim();
-  if (!userText) return { statusCode: 400, headers: { ...CORS, "Content-Type": "application/json" }, body: JSON.stringify({ error: "message vuoto" }) };
+    const { message, threadId: incomingThreadId, behavior, summary } = await req.json();
+    const userText = String(message || "").trim();
+    if (!userText) {
+      return new Response(JSON.stringify({ error: "message vuoto" }), {
+        status: 400, headers: { ...CORS, "Content-Type": "application/json" }
+      });
+    }
 
-  let threadId = (incomingThreadId || "").toString() || null;
-  if (!threadId) {
-    const thread = await client.beta.threads.create();
-    threadId = thread.id;
+    // crea/recupera thread
+    let threadId = (incomingThreadId || "").toString() || null;
+    if (!threadId) {
+      const thread = await client.beta.threads.create();
+      threadId = thread.id;
+    }
+
+    if (summary) {
+      await client.beta.threads.messages.create(threadId, {
+        role: "user",
+        content: `[SINTESI]\n${summary}`
+      });
+    }
+
+    await client.beta.threads.messages.create(threadId, { role: "user", content: userText });
+
+    // Avvia run con streaming eventi
+    const runStream = await client.beta.threads.runs.create(threadId, {
+      assistant_id: process.env.OPENAI_ASSISTANT_ID,
+      additional_instructions:
+        behavior || "Parla chiaro e sintetico. Evita link/citazioni visibili.",
+      stream: true
+    });
+
+    // rispondiamo con lo stream degli eventi (il client filtra solo il testo)
+    const headers = {
+      ...CORS,
+      // event-stream per favorire il proxying corretto
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "x-thread-id": threadId
+    };
+
+    return new Response(runStream.toReadableStream(), { status: 200, headers });
+  } catch (err) {
+    console.error("SERVER ERROR:", err);
+    return new Response(
+      JSON.stringify({ reply: "Errore temporaneo. Riprova tra poco.", error: String(err?.message || err) }),
+      { status: 200, headers: { ...CORS, "Content-Type": "application/json" } }
+    );
   }
-
-  await client.beta.threads.messages.create(threadId, { role: "user", content: userText });
-
-  await client.beta.threads.runs.createAndPoll(threadId, {
-    assistant_id: process.env.OPENAI_ASSISTANT_ID,
-    additional_instructions: behavior || "Rispondi chiaro e sintetico."
-  });
-
-  const msgs = await client.beta.threads.messages.list(threadId, { order: "desc", limit: 1 });
-  const reply = (msgs.data[0]?.content || [])
-    .filter(p => p.type === "text")
-    .map(p => p.text.value)
-    .join("\\n") || "Nessuna risposta.";
-
-  return {
-    statusCode: 200,
-    headers: { ...CORS, "Content-Type": "application/json", "x-thread-id": threadId },
-    body: JSON.stringify({ reply })
-  };
 };
