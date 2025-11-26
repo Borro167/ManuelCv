@@ -1,332 +1,286 @@
-<!DOCTYPE html>
-<html lang="it">
+<!doctype html>
+<html lang="it" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Chat CV di Manuel</title>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="color-scheme" content="dark light" />
+  <title>Assistente di Manuel — Chat</title>
   <style>
-    :root {
-      --bg: #0d1117;
-      --card: rgba(22, 27, 34, 0.75);
-      --panel: rgba(255, 255, 255, 0.06);
-      --text: #e6edf3;
-      --muted: #9fb3c8;
-      --accent: #8affd1;
-      --accent-2: #70a4ff;
-      --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    :root{
+      --bg:#0b0f1a;--bg-grad-1:#0b0f1a;--bg-grad-2:#121a2f;
+      --surface:#0f1629cc;--surface-2:#121a2fcc;--card:#131c37aa;
+      --text:#e9eefc;--muted:#aab3cd;--primary:#86a6ff;--accent:#b38bff;
+      --ok:#35d39e;--warn:#ffb64d;--border:1px solid rgba(255,255,255,.08);
+      --shadow:0 10px 40px rgba(0,0,0,.55);--pad:clamp(12px,2vw,20px)
     }
-
-    * {
-      box-sizing: border-box;
+    :root[data-theme="light"]{
+      --bg:#f7f8ff;--bg-grad-1:#f7f8ff;--bg-grad-2:#e9ecff;
+      --surface:#ffffffcc;--surface-2:#ffffffee;--card:#ffffffcc;
+      --text:#0b0f1a;--muted:#4a5470;--border:1px solid rgba(0,0,0,.08);
+      --shadow:0 12px 36px rgba(0,0,0,.10)
     }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: 'Space Grotesk', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: radial-gradient(circle at 20% 20%, rgba(112, 164, 255, 0.18), transparent 30%),
-                  radial-gradient(circle at 80% 0%, rgba(138, 255, 209, 0.15), transparent 30%),
-                  radial-gradient(circle at 80% 70%, rgba(112, 164, 255, 0.12), transparent 35%),
-                  var(--bg);
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 32px 18px;
+    *{box-sizing:border-box} html,body{height:100%;margin:0}
+    body{
+      font-family: ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial;
+      color:var(--text);
+      background:
+        radial-gradient(1200px 800px at 10% -10%, #23326b44, transparent),
+        radial-gradient(1000px 600px at 100% 0%, #5b3cc744, transparent),
+        linear-gradient(160deg, var(--bg-grad-1), var(--bg-grad-2));
+      overflow:hidden;
     }
-
-    .page {
-      width: 100%;
-      max-width: 1080px;
-      display: grid;
-      gap: 18px;
-    }
-
-    .hero {
-      background: linear-gradient(135deg, rgba(112, 164, 255, 0.18), rgba(138, 255, 209, 0.18));
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 22px;
-      padding: 20px 24px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(16px);
-    }
-
-    .hero h1 {
-      margin: 0 0 8px;
-      font-size: 28px;
-      letter-spacing: -0.02em;
-    }
-
-    .hero p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.5;
-    }
-
-    .chat-shell {
-      background: var(--card);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 24px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(16px);
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      min-height: 520px;
-      max-height: 75vh;
-      overflow: hidden;
-    }
-
-    .chat-header {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 18px 20px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      background: linear-gradient(90deg, rgba(112, 164, 255, 0.08), rgba(138, 255, 209, 0.08));
-    }
-
-    .avatar {
-      width: 44px;
-      height: 44px;
-      border-radius: 14px;
-      background: linear-gradient(145deg, var(--accent), var(--accent-2));
-      display: grid;
-      place-items: center;
-      font-weight: 700;
-      color: #0b1220;
-    }
-
-    .chat-title {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .chat-title strong {
-      font-size: 16px;
-      letter-spacing: -0.01em;
-    }
-
-    .status {
-      font-size: 12px;
-      color: var(--muted);
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .status .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 0 6px rgba(138, 255, 209, 0.15);
-    }
-
-    .messages {
-      overflow-y: auto;
-      padding: 18px 20px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      scroll-behavior: smooth;
-    }
-
-    .bubble {
-      max-width: 75%;
-      padding: 12px 14px;
-      border-radius: 16px;
-      line-height: 1.45;
-      color: var(--text);
-      position: relative;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
-      border: 1px solid rgba(255, 255, 255, 0.04);
-    }
-
-    .bubble.bot {
-      align-self: flex-start;
-      background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
-    }
-
-    .bubble.user {
-      align-self: flex-end;
-      background: linear-gradient(145deg, var(--accent), var(--accent-2));
-      color: #0b1220;
-    }
-
-    .input-area {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-      padding: 14px 14px 16px;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      background: var(--panel);
-    }
-
-    .input-area input {
-      width: 100%;
-      padding: 14px 16px;
-      border-radius: 14px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(255, 255, 255, 0.04);
-      color: var(--text);
-      font-size: 15px;
-      outline: none;
-      transition: border 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-    }
-
-    .input-area input:focus {
-      border-color: rgba(138, 255, 209, 0.65);
-      background: rgba(255, 255, 255, 0.07);
-      box-shadow: 0 0 0 6px rgba(138, 255, 209, 0.12);
-    }
-
-    .input-area button {
-      padding: 0 18px;
-      border: none;
-      border-radius: 12px;
-      background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      color: #0b1220;
-      font-weight: 700;
-      cursor: pointer;
-      font-size: 15px;
-      transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      box-shadow: 0 10px 20px rgba(112, 164, 255, 0.3);
-    }
-
-    .input-area button:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 16px 30px rgba(112, 164, 255, 0.35);
-      filter: brightness(1.02);
-    }
-
-    .input-area button:active {
-      transform: translateY(0);
-    }
-
-    .hint {
-      font-size: 13px;
-      color: var(--muted);
-      text-align: right;
-      padding: 0 6px;
-    }
-
-    /* Scrollbar styling for desktop */
-    .messages::-webkit-scrollbar {
-      width: 10px;
-    }
-
-    .messages::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.03);
-    }
-
-    .messages::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.12);
-      border-radius: 10px;
-    }
-
-    @media (max-width: 720px) {
-      body {
-        padding: 18px 12px;
-      }
-      .chat-shell {
-        min-height: 70vh;
-        max-height: 78vh;
-      }
-      .bubble {
-        max-width: 90%;
-      }
-      .hero h1 {
-        font-size: 24px;
-      }
-    }
+    .wrap{height:100dvh;display:grid;grid-template-rows:auto 1fr auto;}
+    .header{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px var(--pad);backdrop-filter: blur(10px);background:linear-gradient(180deg, var(--surface), transparent);border-bottom:var(--border)}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:linear-gradient(135deg,var(--primary),var(--accent));color:#0b0f1a;font-weight:900;box-shadow:var(--shadow)}
+    .title{font-weight:700;letter-spacing:.2px}
+    .status{display:flex;align-items:center;gap:8px;font-size:.95em;color:var(--muted)}
+    .dot{width:10px;height:10px;border-radius:999px;background:var(--warn);box-shadow:0 0 0 2px #0002}
+    .chat{max-width:980px;margin:0 auto;padding:16px var(--pad);overflow:auto;scroll-behavior:smooth}
+    .msgs{display:flex;flex-direction:column;gap:12px;padding-bottom:24px}
+    .msg{max-width:min(780px, 90%);padding:12px 14px;border-radius:18px;line-height:1.45;background:var(--card);backdrop-filter: blur(6px);box-shadow:var(--shadow);border:var(--border);animation:pop .15s ease;white-space:pre-wrap}
+    .msg.me{align-self:flex-end;background:linear-gradient(135deg,#20305f,#273a75)}
+    .msg.bot{align-self:flex-start;background:linear-gradient(135deg,#121a32,#101527)}
+    .meta{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:.82em;margin-top:6px}
+    .composer{position:sticky;bottom:0;z-index:15;padding:12px var(--pad) calc(12px + env(safe-area-inset-bottom));background:linear-gradient(0deg, var(--surface-2), transparent);backdrop-filter: blur(10px);border-top:var(--border)}
+    .row{max-width:980px;margin:0 auto;display:flex;gap:10px;align-items:flex-end}
+    textarea{flex:1;min-height:48px;max-height:33dvh;resize:none;padding:12px 14px;border-radius:16px;border:var(--border);background:rgba(255,255,255,.03);color:var(--text);outline:none}
+    .btn{height:48px;display:inline-flex;align-items:center;gap:10px;padding:0 16px;border-radius:14px;border:none;cursor:pointer;font-weight:700;color:#0b0f1a;background:linear-gradient(135deg,var(--primary),var(--accent));box-shadow:var(--shadow)}
+    .btn[disabled]{opacity:.7;cursor:wait}
+    @media (max-width:720px){.msg{max-width:92%}}
+    @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
   </style>
 </head>
 <body>
-  <main class="page">
-    <section class="hero">
-      <h1>Chat CV di Manuel</h1>
-      <p>Fatti concreti, zero frasi di circostanza. Scopri i punti di forza e le aree da migliorare senza filtri.</p>
-    </section>
-
-    <section class="chat-shell">
-      <div class="chat-header">
-        <div class="avatar">M</div>
-        <div class="chat-title">
-          <strong>Manuel · Chat dedicata</strong>
-          <span class="status"><span class="dot"></span> attivo ora</span>
-        </div>
+  <div class="wrap">
+    <header class="header">
+      <div class="brand">
+        <div class="logo">M</div>
+        <div class="title">Assistente di Manuel</div>
       </div>
-
-      <div class="messages" id="messages">
-        <div class="bubble bot">
-          Ciao! Sono qui per parlarti di Manuel.<br>
-          Dirò i suoi veri pregi e difetti, senza le solite frasi come "lavoro di squadra" o "professionalità".<br>
-          Solo quello che ti serve davvero.
-        </div>
+      <div class="status" title="Stato server">
+        <span class="dot" id="netDot"></span>
+        <span id="netText">controllo…</span>
       </div>
+    </header>
 
-      <div class="input-area">
-        <input type="text" id="user-input" placeholder="Scrivi un messaggio..." />
-        <button id="send-button">Invia</button>
+    <main class="chat" aria-live="polite">
+      <div class="msgs" id="messages"></div>
+    </main>
+
+    <footer class="composer">
+      <div class="row">
+        <textarea id="input" placeholder="Scrivi e premi Invio… (Shift+Invio va a capo)" autocomplete="off"></textarea>
+        <button id="send" class="btn" type="button">Invia</button>
       </div>
-    </section>
-
-    <div class="hint">Premi Invio per inviare più velocemente.</div>
-  </main>
+    </footer>
+  </div>
 
   <script>
-    const messagesContainer = document.getElementById('messages');
-    const userInput = document.getElementById('user-input');
-    const sendButton = document.getElementById('send-button');
+"use strict";
+const el = {
+  messages: document.getElementById("messages"),
+  input: document.getElementById("input"),
+  send: document.getElementById("send"),
+  netDot: document.getElementById("netDot"),
+  netText: document.getElementById("netText")
+};
 
-    function appendMessage(text, sender) {
-      const message = document.createElement('div');
-      message.classList.add('bubble', sender);
-      message.textContent = text;
-      messagesContainer.appendChild(message);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+let threadId = null;
+const nowTime = () => new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+
+// HTML escape totale
+function escapeText(s){ return String(s).replace(/[&<>"]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+
+// rimozione citazioni/link visibili
+function cleanChat(text){
+  let s = String(text || "");
+  s = s.replace(/[【〔][^】〕]*[】〕]/g, "");
+  s = s.replace(/(?:\s*`?\[(?:\^\w+|\d+(?::[^\]]+)?|[^\]]{1,120}\.(?:pdf|docx?|xlsx?|pptx?|txt|md|png|jpe?g|webp|svg))\]`?)+/gi, "");
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1");
+  s = s.replace(/<https?:\/\/[^>\s]+>/gi, "");
+  s = s.replace(/`{1,3}([\s\S]*?)`{1,3}/g, "$1");
+  s = s.replace(/\s*[\(\[\{]\s*[\)\]\}]\s*/g, "");
+  s = s.replace(/\s{2,}/g, " ").replace(/\s+([,.;:!?])/g, "$1");
+  return s;
+}
+
+function getBehavior(){
+  return [
+    "Parla chiaro e sintetico.",
+    "Punto chiave subito, poi dettagli.",
+    "Niente link o citazioni in chiaro.",
+    "Coerente col ruolo di assistente di Manuel.",
+    "Non inventare dati."
+  ].join("\n");
+}
+
+function introText(){
+  return "Ciao! Sono l’assistente di Manuel. Il mio padrone mi ha addestrato per simulare un colloquio di lavoro. Iniziamo? Prometto di dire la verità";
+}
+
+// UI
+function addBubble(role, text){
+  const wrap = document.createElement("div");
+  wrap.className = `msg ${role==="user"?"me":"bot"}`;
+  wrap.textContent = text;
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = nowTime();
+  wrap.appendChild(meta);
+  el.messages.appendChild(wrap);
+  el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
+  return wrap;
+}
+function addStreamingBubble(){
+  const wrap = document.createElement("div");
+  wrap.className = "msg bot";
+  const txt = document.createElement("div");
+  txt.textContent = "";
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = "…";
+  wrap.appendChild(txt);
+  wrap.appendChild(meta);
+  el.messages.appendChild(wrap);
+  el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
+  return { wrap, txt, meta };
+}
+
+// parsers: accetta sia JSON line-by-line sia SSE "data: {...}"
+function extractTextDelta(evt){
+  // supporta diversi formati evento (Assistants/Responses)
+  const e = evt?.event || evt?.type;
+  const data = evt?.data || evt;
+
+  // 1) Assistants v2: thread.message.delta -> data.delta.content[].text.value
+  if (e === "thread.message.delta" || e === "message.delta") {
+    let out = "";
+    const parts = data?.delta?.content || [];
+    for (const p of parts) {
+      // output_text / input_text / text
+      if (p?.text?.value) out += p.text.value;
+      else if (typeof p?.text === "string") out += p.text;
     }
+    return out;
+  }
 
-    async function handleSend() {
-      const text = userInput.value.trim();
-      if (text === '') return;
+  // 2) Responses API: response.output_text.delta -> data.delta
+  if (e === "response.output_text.delta") {
+    return data?.delta ?? "";
+  }
 
-      appendMessage(text, 'user');
-      userInput.value = '';
-      sendButton.disabled = true;
+  return "";
+}
 
-      try {
-        const response = await fetch('/.netlify/functions/gptHandler', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text })
-        });
+async function ping(){
+  try{
+    const res = await fetch("/.netlify/functions/gptHandler", { method:"OPTIONS" });
+    el.netDot.style.background = res.ok ? "var(--ok)" : "var(--warn)";
+    el.netText.textContent = res.ok ? "online" : "non raggiungibile";
+  }catch{
+    el.netDot.style.background = "var(--warn)";
+    el.netText.textContent = "non raggiungibile";
+  }
+}
 
-        const data = await response.json();
-        appendMessage(data.reply || 'Errore nella risposta.', 'bot');
-      } catch (error) {
-        appendMessage('Si è verificato un problema di rete.', 'bot');
-      } finally {
-        sendButton.disabled = false;
-        userInput.focus();
-      }
-    }
+async function sendMessage(){
+  const text = (el.input.value || "").trim();
+  if(!text) return;
 
-    sendButton.addEventListener('click', handleSend);
+  addBubble("user", text);
+  el.input.value = "";
+  el.send.disabled = true;
 
-    userInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        handleSend();
-      }
+  const streamUI = addStreamingBubble();
+
+  const payload = {
+    message: text,
+    threadId,
+    behavior: getBehavior(),
+    summary: ""
+  };
+
+  try{
+    const res = await fetch("/.netlify/functions/gptHandler", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+      body: JSON.stringify(payload)
     });
+
+    el.netDot.style.background = res.ok ? "var(--ok)" : "var(--warn)";
+    el.netText.textContent = res.ok ? "online" : `errore ${res.status}`;
+
+    const hdrTid = res.headers.get("x-thread-id");
+    if (!threadId && hdrTid) threadId = hdrTid;
+
+    const ctype = (res.headers.get("Content-Type") || "").toLowerCase();
+
+    if (res.ok && res.body && (ctype.includes("event-stream") || ctype.includes("text"))) {
+      // STREAM DI EVENTI -> mostriamo solo le parti di testo
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let full = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        // split per linee; teniamo l'ultima (potrebbe essere incompleta)
+        const lines = buf.split(/\r?\n/);
+        buf = lines.pop() || "";
+
+        for (let line of lines) {
+          line = line.trim();
+          if (!line) continue;
+          if (line.startsWith("data:")) line = line.slice(5).trim();
+          if (line === "[DONE]") continue;
+
+          try {
+            const evt = JSON.parse(line);
+            const delta = extractTextDelta(evt);
+            if (delta) {
+              full += delta;
+              streamUI.txt.textContent = cleanChat(full);
+              el.messages.parentElement.scrollTop = el.messages.parentElement.scrollHeight;
+            }
+          } catch { /* ignora frammenti non JSON */ }
+        }
+      }
+      streamUI.meta.textContent = nowTime();
+    } else {
+      // FALLBACK non-stream (JSON)
+      const data = await res.json().catch(()=>({}));
+      const reply = data?.reply || "Nessuna risposta ricevuta.";
+      streamUI.txt.textContent = cleanChat(reply);
+      streamUI.meta.textContent = nowTime();
+      if (!threadId && data?.threadId) threadId = data.threadId;
+    }
+  } catch (err) {
+    streamUI.txt.textContent = "Errore di connessione. Riprova tra poco.";
+    streamUI.meta.textContent = nowTime();
+    el.netDot.style.background = "var(--warn)";
+    el.netText.textContent = "non raggiungibile";
+    console.error(err);
+  } finally {
+    el.send.disabled = false;
+    el.input.focus();
+  }
+}
+
+// UX
+function autosize(){ el.input.style.height="auto"; const maxPx=Math.round(window.innerHeight*0.33); el.input.style.height=Math.min(el.input.scrollHeight,maxPx)+"px"; }
+el.send.addEventListener("click", sendMessage);
+el.input.addEventListener("keydown", (ev)=>{ if(ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); sendMessage(); } });
+el.input.addEventListener("input", autosize);
+
+// avvio
+addBubble("assistant", introText());
+autosize();
+ping();
+setInterval(ping, 15000);
   </script>
 </body>
 </html>
