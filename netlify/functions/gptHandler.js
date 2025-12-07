@@ -74,9 +74,16 @@ export default async (req) => {
 
     return new Response(runStream.toReadableStream(), { status: 200, headers });
   } catch (err) {
-    console.error("SERVER ERROR:", err);
+    // Log solo metadati, nessun dato sensibile
+    console.error("SERVER ERROR:", {
+      type: err.name || "Unknown",
+      timestamp: new Date().toISOString()
+    });
     return new Response(
-      JSON.stringify({ reply: "Errore temporaneo. Riprova tra poco.", error: String(err?.message || err) }),
+      JSON.stringify({ 
+        reply: "Errore temporaneo. Riprova tra poco.", 
+        error: "Server error" 
+      }),
       { status: 200, headers: { ...CORS, "Content-Type": "application/json" } }
     );
   }
