@@ -1,0 +1,9 @@
+{
+  "name": "manuel-chat-assistant",
+  "version": "4.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "openai": "^4.58.1"
+  }
+}
